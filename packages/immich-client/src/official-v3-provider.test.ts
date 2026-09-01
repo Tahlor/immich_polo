@@ -14,6 +14,16 @@ function jsonResponse(value: unknown, status = 200): Response {
   });
 }
 
+function concat(chunks: Uint8Array[]): Uint8Array {
+  const result = new Uint8Array(chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0));
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return result;
+}
+
 describe("OfficialImmichV3Provider", () => {
   it("verifies v3 and current user using x-api-key", async () => {
     const seen: Array<{ url: string; key: string | null }> = [];
@@ -90,12 +100,12 @@ describe("OfficialImmichV3Provider", () => {
   });
 
   it("streams multipart upload bytes and recognizes duplicate responses", async () => {
-    let multipart = Buffer.alloc(0);
+    let multipart = new Uint8Array();
     vi.stubGlobal("fetch", vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
       const body = init?.body as unknown as AsyncIterable<Uint8Array>;
-      const chunks: Buffer[] = [];
-      for await (const chunk of body) chunks.push(Buffer.from(chunk));
-      multipart = Buffer.concat(chunks);
+      const chunks: Uint8Array[] = [];
+      for await (const chunk of body) chunks.push(chunk);
+      multipart = concat(chunks);
       return jsonResponse({ id: "canonical-id", status: "duplicate" }, 200);
     }));
 
@@ -112,7 +122,7 @@ describe("OfficialImmichV3Provider", () => {
     });
 
     expect(result).toEqual({ assetId: "canonical-id", duplicate: true });
-    const text = multipart.toString("utf8");
+    const text = new TextDecoder().decode(multipart);
     expect(text).toContain('name="fileCreatedAt"');
     expect(text).toContain("2024-05-06T07:08:09.000Z");
     expect(text).toContain('name="assetData"; filename="clip.mp4"');
