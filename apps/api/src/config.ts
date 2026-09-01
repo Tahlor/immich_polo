@@ -7,6 +7,7 @@ const ConfigSchema = z.object({
   POLO_CREDENTIAL_KEY: z.string().optional(),
   POLO_REGISTRATION_SECRET: z.string().min(12).optional(),
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+  IMMICH_PROVIDER: z.enum(["unverified", "official-v3"]).default("unverified"),
 });
 
 export interface AppConfig {
@@ -16,6 +17,7 @@ export interface AppConfig {
   credentialKey?: string;
   registrationSecret?: string;
   sessionTtlDays: number;
+  immichProvider: "unverified" | "official-v3";
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -25,6 +27,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     port: parsed.PORT,
     databasePath: parsed.DATABASE_PATH,
     sessionTtlDays: parsed.SESSION_TTL_DAYS,
+    immichProvider: parsed.IMMICH_PROVIDER,
     ...(parsed.POLO_CREDENTIAL_KEY ? { credentialKey: parsed.POLO_CREDENTIAL_KEY } : {}),
     ...(parsed.POLO_REGISTRATION_SECRET ? { registrationSecret: parsed.POLO_REGISTRATION_SECRET } : {}),
   };
