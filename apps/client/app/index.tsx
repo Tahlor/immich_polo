@@ -19,7 +19,6 @@ import {
 import { clearSessionToken, loadSessionToken, saveSessionToken } from "../lib/session";
 
 type AppSession = { token: string; user: PublicUser };
-
 type AuthMode = "login" | "register";
 
 function errorMessage(error: unknown): string {
@@ -67,12 +66,12 @@ export default function HomeScreen() {
       }
       try {
         const user = await getMe(token);
-        if (!active) return;
         const current = { token, user };
-        setSession(current);
         await refreshHome(current);
+        if (active) setSession(current);
       } catch {
         await clearSessionToken();
+        if (active) setSession(null);
       } finally {
         if (active) setBooting(false);
       }
@@ -89,10 +88,10 @@ export default function HomeScreen() {
         : await register({ username, password, displayName, registrationSecret });
       await saveSessionToken(result.token);
       const current = { token: result.token, user: result.user };
+      await refreshHome(current);
       setSession(current);
       setPassword("");
       setRegistrationSecret("");
-      await refreshHome(current);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -113,6 +112,20 @@ export default function HomeScreen() {
     }
   };
 
+  const openThread = async (thread: ThreadSummary) => {
+    if (!session) return;
+    setSelectedThread(thread);
+    setBusy(true);
+    setError(null);
+    try {
+      setPosts(await listPosts(session.token, thread.id));
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const startThread = async (otherUser: PublicUser) => {
     if (!session) return;
     setBusy(true);
@@ -121,20 +134,6 @@ export default function HomeScreen() {
       const thread = await createThread(session.token, [otherUser.id]);
       await refreshHome(session);
       await openThread(thread);
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const openThread = async (thread: ThreadSummary) => {
-    if (!session) return;
-    setSelectedThread(thread);
-    setBusy(true);
-    setError(null);
-    try {
-      setPosts(await listPosts(session.token, thread.id));
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -224,7 +223,7 @@ export default function HomeScreen() {
           <View style={styles.rowBetween}><Text style={styles.sectionTitle}>Conversations</Text><Pressable onPress={() => void refreshHome(session)}><Text style={styles.link}>Refresh</Text></Pressable></View>
           {threads.length === 0 ? <Text style={styles.muted}>No conversations yet.</Text> : threads.map((thread) => (
             <Pressable key={thread.id} onPress={() => void openThread(thread)} style={styles.threadCard}>
-              <Text style={styles.cardTitle}>{thread.title ?? thread.members.filter((member) => member.id !== session.user.id).map((member) => member.displayName).join(", ") || "Just me"}</Text>
+              <Text style={styles.cardTitle}>{thread.title ?? (thread.members.filter((member) => member.id !== session.user.id).map((member) => member.displayName).join(", ") || "Just me")}</Text>
               <Text style={styles.muted}>{thread.members.length} member{thread.members.length === 1 ? "" : "s"}</Text>
             </Pressable>
           ))}
