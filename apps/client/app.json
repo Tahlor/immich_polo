@@ -6,7 +6,25 @@
     "scheme": "immichpolo",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
-    "plugins": ["expo-router", "expo-secure-store"],
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Immich Polo to choose photos and videos you want to post.",
+          "cameraPermission": "Allow Immich Polo to record photos and videos you want to post.",
+          "microphonePermission": "Allow Immich Polo to record audio with videos you want to post."
+        }
+      ]
+    ],
+    "android": {
+      "package": "com.taylorarchibald.immichpolo",
+      "versionCode": 1
+    },
+    "ios": {
+      "bundleIdentifier": "com.taylorarchibald.immichpolo"
+    },
     "experiments": {
       "typedRoutes": true
     },
