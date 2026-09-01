@@ -27,6 +27,7 @@ afterEach(async () => {
 class FakeProvider implements ImmichMediaProvider {
   readonly seenSecrets: ImmichConnectionSecret[] = [];
   readonly videoRanges: Array<string | undefined> = [];
+  readonly uploads: Array<{ filename: string; contentType: string; capturedAt?: Date; bytes: string }> = [];
 
   async verifyConnection(connection: ImmichConnectionSecret): Promise<ConnectionInfo> {
     this.seenSecrets.push(connection);
@@ -54,8 +55,17 @@ class FakeProvider implements ImmichMediaProvider {
     return { status: range ? 206 : 200, headers: { "content-type": "video/mp4", "accept-ranges": "bytes", ...(range ? { "content-range": "bytes 100-199/1000" } : {}) }, body: this.stream("video") };
   }
 
-  async uploadAsset(_connection: ImmichConnectionSecret, _input: UploadInput): Promise<UploadResult> {
-    return { assetId: "unused", duplicate: false };
+  async uploadAsset(connection: ImmichConnectionSecret, input: UploadInput): Promise<UploadResult> {
+    this.seenSecrets.push(connection);
+    const chunks: Buffer[] = [];
+    for await (const chunk of input.bytes) chunks.push(Buffer.from(chunk));
+    this.uploads.push({
+      filename: input.filename,
+      contentType: input.contentType,
+      ...(input.capturedAt ? { capturedAt: input.capturedAt } : {}),
+      bytes: Buffer.concat(chunks).toString("utf8"),
+    });
+    return { assetId: "uploaded-canonical", duplicate: false };
   }
 
   private asset(id: string): MediaAsset {
@@ -75,7 +85,7 @@ async function register(username: string) {
 }
 
 describe("Polo-side Immich integration routes", () => {
-  it("encrypts connection credentials and prevents another user from browsing them", async () => {
+  it("encrypts connection credentials and prevents another user from browsing or thumbnailing them", async () => {
     const provider = new FakeProvider();
     const built = buildApp({ databasePath: ":memory:", registrationSecret, credentialKey, immichProvider: provider });
     app = built.app;
@@ -91,9 +101,15 @@ describe("Polo-side Immich integration routes", () => {
     const aliceAssets = await app.inject({ method: "GET", url: `/immich-connections/${connectionId}/assets`, headers: { authorization: `Bearer ${alice.token}` } });
     expect(aliceAssets.statusCode).toBe(200);
     expect(aliceAssets.json().assets[0].id).toBe("asset-1");
+    const thumbnail = await app.inject({ method: "GET", url: `/immich-connections/${connectionId}/assets/asset-1/thumbnail`, headers: { authorization: `Bearer ${alice.token}` } });
+    expect(thumbnail.statusCode).toBe(200);
+    expect(thumbnail.body).toBe("thumb");
+    expect(thumbnail.headers["x-secret-upstream"]).toBeUndefined();
 
     const bobAssets = await app.inject({ method: "GET", url: `/immich-connections/${connectionId}/assets`, headers: { authorization: `Bearer ${bob.token}` } });
     expect(bobAssets.statusCode).toBe(404);
+    const bobThumbnail = await app.inject({ method: "GET", url: `/immich-connections/${connectionId}/assets/asset-1/thumbnail`, headers: { authorization: `Bearer ${bob.token}` } });
+    expect(bobThumbnail.statusCode).toBe(404);
     expect(provider.seenSecrets.some((secret) => secret.apiKey === "top-secret-key")).toBe(true);
   });
 
@@ -126,6 +142,50 @@ describe("Polo-side Immich integration routes", () => {
 
     const denied = await app.inject({ method: "GET", url: `/posts/${postId}/assets/${postAssetId}/media`, headers: { authorization: `Bearer ${mallory.token}` } });
     expect(denied.statusCode).toBe(404);
+  });
+
+  it("streams a multipart local upload into the provider and stores only its canonical asset reference", async () => {
+    const provider = new FakeProvider();
+    const built = buildApp({ databasePath: ":memory:", registrationSecret, credentialKey, immichProvider: provider });
+    app = built.app;
+    const alice = await register("alice");
+    const bob = await register("bob");
+    const connection = await app.inject({ method: "POST", url: "/immich-connections", headers: { authorization: `Bearer ${alice.token}` }, payload: { baseUrl: "https://immich.test", apiKey: "alice-key" } });
+    const connectionId = connection.json().connection.id as string;
+    const thread = await app.inject({ method: "POST", url: "/threads", headers: { authorization: `Bearer ${alice.token}` }, payload: { memberUserIds: [bob.user.id] } });
+    const threadId = thread.json().thread.id as string;
+    const capturedAt = "2024-05-06T07:08:09.000Z";
+    const boundary = "----polo-test-boundary";
+    const payload = Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="clip.mp4"\r\nContent-Type: video/mp4\r\n\r\nhello-stream\r\n--${boundary}--\r\n`,
+    );
+
+    const upload = await app.inject({
+      method: "POST",
+      url: `/threads/${threadId}/posts/upload/${connectionId}?capturedAt=${encodeURIComponent(capturedAt)}`,
+      headers: {
+        authorization: `Bearer ${alice.token}`,
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+      },
+      payload,
+    });
+    expect(upload.statusCode).toBe(201);
+    expect(upload.json().upload).toEqual({ duplicate: false });
+    expect(provider.uploads).toEqual([{ filename: "clip.mp4", contentType: "video/mp4", capturedAt: new Date(capturedAt), bytes: "hello-stream" }]);
+    expect(built.database.sqlite.prepare("SELECT immich_asset_id AS assetId FROM post_assets WHERE post_id=?").get(upload.json().post.id)).toEqual({ assetId: "uploaded-canonical" });
+    expect(built.database.sqlite.prepare("SELECT COUNT(*) AS count FROM notification_outbox WHERE post_id=?").get(upload.json().post.id)).toEqual({ count: 1 });
+
+    const bobAttempt = await app.inject({
+      method: "POST",
+      url: `/threads/${threadId}/posts/upload/${connectionId}`,
+      headers: {
+        authorization: `Bearer ${bob.token}`,
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+      },
+      payload,
+    });
+    expect(bobAttempt.statusCode).toBe(404);
+    expect(provider.uploads).toHaveLength(1);
   });
 
   it("keeps scheduled existing media invisible to recipients but readable by its author", async () => {
