@@ -1,23 +1,33 @@
 import Fastify from "fastify";
+import { UnverifiedImmichProvider, type ImmichMediaProvider } from "@immich-polo/immich-client";
 import { registerAuthRoutes } from "./auth/routes.js";
 import { loadConfig } from "./config.js";
 import { checkDatabase, createDatabase } from "./db/client.js";
+import { registerImmichRoutes } from "./immich/routes.js";
+import { registerMediaRoutes } from "./media/routes.js";
+import { registerExistingImmichPostRoute } from "./posts/from-immich.js";
 import { registerPostRoutes } from "./posts/routes.js";
+import { CredentialCrypto } from "./security/credential-crypto.js";
 import { registerThreadRoutes } from "./threads/routes.js";
 
 export interface BuildAppOptions {
   databasePath?: string;
   logger?: boolean;
   registrationSecret?: string;
+  credentialKey?: string;
+  immichProvider?: ImmichMediaProvider;
 }
 
 export function buildApp(options: BuildAppOptions = {}) {
   const env = { ...process.env };
   if (options.databasePath) env.DATABASE_PATH = options.databasePath;
   if (options.registrationSecret) env.POLO_REGISTRATION_SECRET = options.registrationSecret;
+  if (options.credentialKey) env.POLO_CREDENTIAL_KEY = options.credentialKey;
   const config = loadConfig(env);
   const database = createDatabase(config.databasePath);
   const app = Fastify({ logger: options.logger ?? false });
+  const immichProvider = options.immichProvider ?? new UnverifiedImmichProvider();
+  const credentialCrypto = config.credentialKey ? new CredentialCrypto(config.credentialKey) : null;
 
   app.get("/health", async () => ({ ok: true, service: "immich-polo-api" }));
 
@@ -34,10 +44,13 @@ export function buildApp(options: BuildAppOptions = {}) {
   registerAuthRoutes(app, database.sqlite, config);
   registerThreadRoutes(app, database.sqlite);
   registerPostRoutes(app, database.sqlite);
+  registerImmichRoutes(app, database.sqlite, immichProvider, credentialCrypto);
+  registerExistingImmichPostRoute(app, database.sqlite, immichProvider, credentialCrypto);
+  registerMediaRoutes(app, database.sqlite, immichProvider, credentialCrypto);
 
   app.addHook("onClose", async () => {
     database.sqlite.close();
   });
 
-  return { app, config, database };
+  return { app, config, database, immichProvider };
 }

@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
+import { enqueuePublicationEvent } from "./outbox.js";
 
 export interface PublicationResult {
   publishedPostIds: string[];
@@ -8,8 +8,7 @@ export interface PublicationResult {
 /**
  * Atomically publishes every currently-due scheduled post and creates one durable
  * notification-outbox event per successful publication. Calling this repeatedly,
- * after restart, or from competing workers is safe: the guarded status update and
- * unique outbox keys make publication idempotent.
+ * after restart, or from competing workers is safe.
  */
 export function publishDuePosts(
   sqlite: Database.Database,
@@ -30,16 +29,11 @@ export function publishDuePosts(
        SET status = 'published', published_at = ?
        WHERE id = ? AND status = 'scheduled' AND visible_at <= ?`,
     );
-    const enqueue = sqlite.prepare(
-      `INSERT OR IGNORE INTO notification_outbox
-       (id, post_id, event_key, event_type, created_at, delivered_at, attempts, last_error)
-       VALUES (?, ?, ?, 'post.published', ?, NULL, 0, NULL)`,
-    );
 
     for (const post of due) {
       const result = publish.run(nowMs, post.id, nowMs);
       if (result.changes !== 1) continue;
-      enqueue.run(randomUUID(), post.id, `post-published:${post.id}`, nowMs);
+      enqueuePublicationEvent(sqlite, post.id, nowMs);
       publishedPostIds.push(post.id);
     }
 
