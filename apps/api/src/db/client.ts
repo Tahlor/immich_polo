@@ -3,6 +3,7 @@ import { dirname } from "node:path";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema.js";
+import { runMigrations } from "./migrations.js";
 
 export function createDatabase(path: string) {
   if (path !== ":memory:") {
@@ -14,6 +15,7 @@ export function createDatabase(path: string) {
   if (path !== ":memory:") {
     sqlite.pragma("journal_mode = WAL");
   }
+  runMigrations(sqlite);
 
   return {
     sqlite,
@@ -23,4 +25,5 @@ export function createDatabase(path: string) {
 
 export function checkDatabase(sqlite: Database.Database): void {
   sqlite.prepare("SELECT 1 AS ok").get();
+  sqlite.prepare("SELECT name FROM _polo_migrations LIMIT 1").get();
 }

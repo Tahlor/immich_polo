@@ -8,10 +8,28 @@ export const users = sqliteTable(
     id: text("id").primaryKey(),
     displayName: text("display_name").notNull(),
     authSubject: text("auth_subject").notNull(),
+    passwordHash: text("password_hash"),
     notificationEnabled: integer("notification_enabled", { mode: "boolean" }).notNull().default(true),
     createdAt: timestamp("created_at").notNull(),
   },
   (table) => [uniqueIndex("users_auth_subject_uq").on(table.authSubject)],
+);
+
+export const authSessions = sqliteTable(
+  "auth_sessions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull(),
+    createdAt: timestamp("created_at").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    lastUsedAt: timestamp("last_used_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("auth_sessions_token_hash_uq").on(table.tokenHash),
+    index("auth_sessions_user_idx").on(table.userId),
+    index("auth_sessions_expiry_idx").on(table.expiresAt),
+  ],
 );
 
 export const immichConnections = sqliteTable(
