@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type {
   AssetPage,
   AssetQuery,
@@ -227,7 +226,7 @@ export class OfficialImmichV3Provider implements ImmichMediaProvider {
   }
 
   async uploadAsset(connection: ImmichConnectionSecret, input: UploadInput): Promise<UploadResult> {
-    const boundary = `immich-polo-${randomUUID()}`;
+    const boundary = `immich-polo-${globalThis.crypto.randomUUID()}`;
     const headers = authHeaders(connection);
     headers.set("Content-Type", `multipart/form-data; boundary=${boundary}`);
     const init: RequestInit & { duplex: "half" } = {
