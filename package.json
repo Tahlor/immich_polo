@@ -1,0 +1,26 @@
+{
+  "name": "immich-polo",
+  "version": "0.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build:packages": "npm run build --workspace @immich-polo/domain && npm run build --workspace @immich-polo/immich-client",
+    "build": "npm run build:packages && npm run build --workspace @immich-polo/api && npm run build --workspace @immich-polo/client",
+    "dev:api": "npm run build:packages && npm run dev --workspace @immich-polo/api",
+    "dev:client": "npm run start --workspace @immich-polo/client",
+    "lint": "npm run lint --workspace @immich-polo/domain && npm run lint --workspace @immich-polo/immich-client && npm run lint --workspace @immich-polo/api && npm run lint --workspace @immich-polo/client",
+    "typecheck": "npm run build:packages && npm run typecheck --workspace @immich-polo/api && npm run typecheck --workspace @immich-polo/client",
+    "test": "npm run build:packages && npm run test --workspace @immich-polo/domain && npm run test --workspace @immich-polo/immich-client && npm run test --workspace @immich-polo/api",
+    "check": "npm run lint && npm run typecheck && npm run test && npm run build"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.11"
+  }
+}

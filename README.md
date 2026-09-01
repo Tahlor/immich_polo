@@ -2,17 +2,26 @@
 
 A private, self-hosted, Marco-Polo-style asynchronous video/photo conversation app built on top of an existing [Immich](https://immich.app/) server.
 
-## Core idea
+> **Core invariant:** Immich owns canonical media bytes. Immich Polo owns conversation metadata, authorization, scheduling, and watch state.
 
-**Immich owns media. Immich Polo owns conversation semantics.**
+## Current status
 
-Immich Polo does not create a second photo/video library. Every posted photo or video is represented by an Immich asset ID plus Polo metadata such as thread, author, order, caption, visibility time, and watch state.
+The repository now contains a runnable foundation rather than only a plan:
 
-This gives us a conversational layer over the user's complete Immich history while keeping storage, deduplication, thumbnails, transcoding, metadata, and long-term media management in Immich.
+- npm/TypeScript monorepo;
+- Fastify API with liveness/readiness routes;
+- SQLite + Drizzle V1 schema for users, Immich connections, threads, posts/assets, watch state, and push registrations;
+- AES-256-GCM credential-sealing boundary;
+- shared scheduling/watch domain rules with unit tests;
+- explicit `ImmichMediaProvider` adapter boundary with endpoint-specific calls intentionally blocked until the real v3 contract is verified;
+- Expo/React Native/web shell that checks API connectivity;
+- GitHub Actions running the repository check/build pipeline.
 
-## V1 product goals
+The next hard gate is the real-server Immich contract in [issue #1](https://github.com/Tahlor/immich_polo/issues/1), while authentication/thread authorization in [issue #3](https://github.com/Tahlor/immich_polo/issues/3) can continue in parallel where it does not depend on unverified Immich behavior.
 
-A user can:
+## Product goals
+
+A user can eventually:
 
 - create a 1:1 conversation;
 - record or pick a local photo/video and post it;
@@ -26,59 +35,69 @@ A user can:
 
 Local media selected in Polo is uploaded to Immich first. Polo then creates a post referencing the resulting Immich asset. Scheduled media is also uploaded immediately; only the Polo post is delayed.
 
-## Non-goals for V1
-
-- Replacing or forking the Immich UI.
-- Maintaining duplicate media storage.
-- Building our own transcoding or thumbnail pipeline.
-- Using Immich albums as conversations.
-- End-to-end encrypted media independent of Immich.
-- Rich social-network features.
-- Complex group administration.
-- Perfect background/resumable uploads on every platform before the core flow works.
-
 ## Architecture at a glance
 
 ```text
-Mobile / web client
+Expo mobile/web client
         |
         v
 Immich Polo API
-  - auth / users
-  - threads / membership
-  - posts / scheduling
-  - watch state
-  - notifications
-  - Immich credential + API broker
+  - Polo auth + thread authorization
+  - SQLite conversation state
+  - scheduler / watch state / notifications
+  - server-held encrypted Immich credentials
+  - narrow Immich media adapter
         |
         v
       Immich
   - original media
-  - thumbnails
+  - thumbnails / previews
   - video transcoding
-  - metadata
-  - deduplication
+  - metadata / deduplication
 ```
 
-The client never needs a broad Immich API key. The Polo server authorizes thread access and brokers the minimum Immich operations needed for the signed-in user.
+The recipient never needs a broad Immich API key. A media request is authorized through the Polo thread/post/PostAsset chain before the server touches the exact referenced Immich asset.
 
-## Planned stack
+## Quick start
 
-Keep the system small and self-hostable:
+Requires Node.js 22.13+.
 
-- **Client:** Expo / React Native + Expo Router, with web/PWA support where practical.
-- **API:** TypeScript + Fastify.
-- **Database:** SQLite + Drizzle for V1. The expected family/small-group workload does not justify Postgres or Redis initially.
-- **Scheduling:** durable database state plus a small server worker; no Redis queue required initially.
-- **Notifications:** Expo push notifications initially, behind an interface so native providers can replace it later.
-- **Deployment:** Docker Compose, designed to run next to (not inside) an Immich deployment.
+```bash
+npm install
+npm run check
+npm run dev:api
+```
 
-See [`docs/PRODUCT_PLAN.md`](docs/PRODUCT_PLAN.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+In another shell:
 
-## Product invariant
+```bash
+EXPO_PUBLIC_POLO_API_URL=http://localhost:3000 npm run dev:client
+```
 
-A published Polo media post must always be traceable to exactly one canonical Immich asset. If Polo metadata disappears, the original photo/video still exists in Immich. If an Immich asset is removed, Polo should show a clear missing-media state rather than silently creating another copy.
+Physical phones need an API URL reachable from the phone rather than `localhost`; see [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
+
+## Documentation map
+
+- [`docs/README.md`](docs/README.md) — documentation index.
+- [`docs/PRODUCT_PLAN.md`](docs/PRODUCT_PLAN.md) — requirements, flows, V1 acceptance scenario.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — integration/security/data-flow decisions.
+- [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md) — implemented vs planned HTTP API and mandatory authorization rules.
+- [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — setup, commands, evidence standards.
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — issue-backed order/status.
+- [`AGENTS.md`](AGENTS.md) — instructions for development agents.
+
+## V1 non-goals
+
+- Replacing or forking the Immich UI.
+- Maintaining duplicate permanent media storage.
+- Building our own transcoding or thumbnail pipeline.
+- Using Immich albums as conversations.
+- End-to-end encrypted media independent of Immich.
+- Rich social-network features.
+- Perfect background/resumable uploads on every platform before the core flow works.
 
 ## Development workflow
 
 `master` is the normal development branch. Make small, verified commits directly to `master` unless a feature branch is explicitly requested. Temporary branches must be deleted after merge.
+
+Do not implement guessed Immich endpoint behavior to make a demo pass. Record real-server evidence in the integration/local-test issues and then encode the proven contract behind `packages/immich-client`.

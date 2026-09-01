@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "Immich Polo",
+    "slug": "immich-polo",
+    "version": "0.1.0",
+    "scheme": "immichpolo",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    }
+  }
+}
