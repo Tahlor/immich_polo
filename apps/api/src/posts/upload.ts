@@ -14,6 +14,7 @@ const ParamsSchema = z.object({ threadId: z.string().min(1), connectionId: z.str
 const QuerySchema = z.object({
   capturedAt: z.string().min(1).optional(),
   visibleAt: z.string().min(1).optional(),
+  caption: z.string().trim().max(2000).optional(),
 });
 
 function parseOptionalInstant(value: string | undefined, errorName: string): Date | undefined {
@@ -90,6 +91,7 @@ export function registerLocalUploadRoute(
       authorId: user.id,
       connectionId: connection.stored.id,
       asset,
+      ...(query.data.caption !== undefined ? { caption: query.data.caption } : {}),
       ...(visibleAt ? { visibleAtMs: visibleAt.getTime() } : {}),
     });
     return reply.code(201).send({ post: serializeCreatedMediaPost(post), upload: { duplicate: upload.duplicate } });
