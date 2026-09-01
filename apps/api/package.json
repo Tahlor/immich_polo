@@ -13,6 +13,7 @@
     "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
+    "@fastify/multipart": "^10.1.1",
     "@immich-polo/domain": "*",
     "@immich-polo/immich-client": "*",
     "better-sqlite3": "^13.0.3",

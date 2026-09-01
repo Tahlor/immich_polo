@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -7,9 +6,9 @@ import { parseAbsoluteInstant } from "@immich-polo/domain";
 import { requireUser } from "../auth/routes.js";
 import { ownedConnectionSecret } from "../immich/connections.js";
 import { sendImmichError } from "../immich/errors.js";
-import { enqueuePublicationEvent } from "../scheduling/outbox.js";
 import type { CredentialCrypto } from "../security/credential-crypto.js";
 import { isThreadMember } from "../threads/authorization.js";
+import { createMediaPost, serializeCreatedMediaPost } from "./create-media-post.js";
 
 const ParamsSchema = z.object({ threadId: z.string().min(1) });
 const BodySchema = z.object({
@@ -46,9 +45,7 @@ export function registerExistingImmichPostRoute(
       return sendImmichError(reply, error);
     }
 
-    const now = Date.now();
-    let visibleAt = now;
-    let status: "scheduled" | "published" = "published";
+    let visibleAtMs: number | undefined;
     if (body.data.visibleAt) {
       let requested: Date;
       try {
@@ -56,74 +53,20 @@ export function registerExistingImmichPostRoute(
       } catch {
         return reply.code(400).send({ error: "invalid_visible_at" });
       }
-      if (requested.getTime() <= now) {
+      if (requested.getTime() <= Date.now()) {
         return reply.code(400).send({ error: "visible_at_must_be_future" });
       }
-      visibleAt = requested.getTime();
-      status = "scheduled";
+      visibleAtMs = requested.getTime();
     }
 
-    const postId = randomUUID();
-    const postAssetId = randomUUID();
-    const create = sqlite.transaction(() => {
-      sqlite
-        .prepare(
-          `INSERT INTO posts
-           (id,thread_id,author_id,reply_to_post_id,caption,status,created_at,visible_at,published_at)
-           VALUES (?,?,?,?,?,?,?,?,?)`,
-        )
-        .run(
-          postId,
-          params.data.threadId,
-          user.id,
-          null,
-          body.data.caption ?? null,
-          status,
-          now,
-          visibleAt,
-          status === "published" ? now : null,
-        );
-      sqlite
-        .prepare(
-          `INSERT INTO post_assets
-           (id,post_id,position,immich_connection_id,immich_asset_id,media_type,width,height,duration_ms,captured_at)
-           VALUES (?,?,0,?,?,?,?,?,?,?)`,
-        )
-        .run(
-          postAssetId,
-          postId,
-          connection.stored.id,
-          asset.id,
-          asset.type,
-          asset.width,
-          asset.height,
-          asset.durationMs,
-          asset.capturedAt?.getTime() ?? null,
-        );
-      if (status === "published") enqueuePublicationEvent(sqlite, postId, now);
+    const post = createMediaPost(sqlite, {
+      threadId: params.data.threadId,
+      authorId: user.id,
+      connectionId: connection.stored.id,
+      asset,
+      ...(body.data.caption !== undefined ? { caption: body.data.caption } : {}),
+      ...(visibleAtMs !== undefined ? { visibleAtMs } : {}),
     });
-    create.immediate();
-
-    return reply.code(201).send({
-      post: {
-        id: postId,
-        threadId: params.data.threadId,
-        authorId: user.id,
-        caption: body.data.caption ?? null,
-        status,
-        createdAt: new Date(now).toISOString(),
-        visibleAt: new Date(visibleAt).toISOString(),
-        publishedAt: status === "published" ? new Date(now).toISOString() : null,
-        assets: [{
-          id: postAssetId,
-          position: 0,
-          mediaType: asset.type,
-          width: asset.width,
-          height: asset.height,
-          durationMs: asset.durationMs,
-          capturedAt: asset.capturedAt?.toISOString() ?? null,
-        }],
-      },
-    });
+    return reply.code(201).send({ post: serializeCreatedMediaPost(post) });
   });
 }
