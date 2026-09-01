@@ -120,6 +120,25 @@ export const postViews = sqliteTable(
   (table) => [primaryKey({ columns: [table.postId, table.userId] })],
 );
 
+export const notificationOutbox = sqliteTable(
+  "notification_outbox",
+  {
+    id: text("id").primaryKey(),
+    postId: text("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }),
+    eventKey: text("event_key").notNull(),
+    eventType: text("event_type").notNull(),
+    createdAt: timestamp("created_at").notNull(),
+    deliveredAt: timestamp("delivered_at"),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("last_error"),
+  },
+  (table) => [
+    uniqueIndex("notification_outbox_post_uq").on(table.postId),
+    uniqueIndex("notification_outbox_event_key_uq").on(table.eventKey),
+    index("notification_outbox_pending_idx").on(table.deliveredAt, table.createdAt),
+  ],
+);
+
 export const pushRegistrations = sqliteTable(
   "push_registrations",
   {
