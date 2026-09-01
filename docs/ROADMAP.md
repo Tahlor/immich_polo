@@ -1,90 +1,101 @@
 # Implementation roadmap
 
-The GitHub issues are the executable backlog. This file records intended dependency/order so agents do not treat all open issues as equally ready.
+See also: [`Product plan`](PRODUCT_PLAN.md) · [`Architecture`](ARCHITECTURE.md) · [`API contract`](API_CONTRACT.md) · [`Client`](CLIENT.md) · [`Scheduling/watch`](SCHEDULING.md) · [`Local tests`](LOCAL_TESTS.md)
 
-## Phase 0 — prove assumptions and establish the workspace
+GitHub issues are the executable backlog. This document records dependency/order **and current implementation state** so agents do not treat every open issue as equally ready. An issue remains open until its full acceptance criteria and required runtime gates pass; code existing is not the same as the issue being done.
+
+## Current implementation state
+
+### Implemented in the repository
+
+- TypeScript/npm workspace, Fastify API, SQLite migrations/Drizzle schema, Expo universal client, GitHub Actions checks.
+- Polo account registration/login/logout and hashed persistent bearer sessions.
+- User discovery, thread creation/listing, membership authorization, safe post metadata listing.
+- AES-256-GCM Immich credential-sealing primitive, but no real Immich connection route yet.
+- `ImmichMediaProvider` interface that deliberately refuses guessed endpoint behavior.
+- Durable scheduled-post publisher with idempotent notification outbox.
+- Author reschedule/delete controls and persistent per-user seen/video-position/watch state.
+- Native SecureStore session restoration plus register/login/conversation client UI; media controls intentionally gated.
+
+### Hard blockers / evidence gates
+
+- The real Immich v3 adapter must be based on #11–#13 runtime evidence, not documentation guesses.
+- Bootstrap/device/auth/scheduler behavior still has explicit local gates #14–#17; see [`LOCAL_TESTS.md`](LOCAL_TESTS.md).
+- Push delivery, media composition/playback, and deployment E2E remain incomplete.
+
+## Phase 0 — prove assumptions and establish workspace
 
 ### #1 — Immich v3 integration contract
 
-Highest technical priority. Prove real upload/list/thumbnail/video-range behavior, least-privilege permissions, duplicate semantics, deletion behavior, and version handling against an actual Immich server.
+**Status:** provider interface exists; endpoint implementation is intentionally blocked on #11 (version/permissions), #12 (read/range/deletion), and #13 (upload/dedup/readiness).
 
 ### #2 — TypeScript monorepo bootstrap
 
-Can proceed in parallel with #1 as long as it does not hard-code unverified Immich endpoint behavior.
+**Status:** implementation is substantially present. Do not close until remote CI is green for current `master` and #14/#15 runtime/bootstrap checks pass or any discovered defects are fixed.
 
-**Exit condition:** the workspace is runnable and the Immich boundary is based on observed behavior rather than guesses.
+**Exit condition:** workspace is reproducibly runnable and Immich boundary is based on observed behavior rather than guesses.
 
 ## Phase 1 — first complete posting slice
 
 ### #3 — core schema, accounts, threads, authorization
 
-Build this before exposing recipient media routes. Authorization is structural, not a later hardening pass.
+**Status:** schema, Polo auth/sessions, user discovery, thread membership authorization, credential crypto, and negative API tests are implemented. #16 proves persistent runtime behavior. Immich-connection ownership/routes remain pending the verified provider contract.
 
 ### #4 — existing Immich media picker + posting
 
-This is the distinctive product feature and should land early. A years-old asset should become a post without a media copy.
+**Status:** client/thread structure and provider abstraction are ready; blocked on #11/#12 before endpoint-specific implementation.
 
 ### #5 — local/recorded media upload to Immich
 
-Use the same post model as #4, but first upload to Immich and then reference the returned canonical asset.
+**Status:** post/schema boundaries are ready; blocked on #11/#13 before upload semantics are encoded.
 
-**Exit condition:** two users can exchange posts backed by both old Immich media and new local media.
+**Exit condition:** two users exchange posts backed by old Immich media and new local media without Polo storing originals.
 
 ## Phase 2 — safe media consumption
 
 ### #6 — authorized thumbnails/video streaming
 
-Recipient access must begin from Polo thread/post authorization, not arbitrary Immich IDs. Preserve video byte-range seeking.
+**Status:** authorization model exists, but media routes are blocked on #12. Recipient access must begin from Polo thread/post/PostAsset authorization and preserve real byte-range semantics.
 
-**Exit condition:** the other participant can actually watch media smoothly without receiving broad Immich access.
+**Exit condition:** recipient smoothly watches referenced media without sender credentials or unrelated-library access.
 
 ## Phase 3 — Marco-Polo behavior
 
 ### #7 — durable scheduling
 
-Upload media immediately but keep the Polo post server-hidden until `visible_at`. Publication survives process restarts and is idempotent.
+**Status:** transactional due-post publication, server-time worker, unique notification outbox, author reschedule/delete APIs are implemented. #17 is the restart/race/invisibility runtime gate. Actual push sending remains #9.
 
 ### #8 — continuous thread + watch/unread state
 
-Make the stream conversational: clear unread media, resume/watch state, easy sequential consumption, sender-only scheduled entries.
+**Status:** server PostView persistence/completion rules and metadata thread UI exist. Actual video playback, first-unread flow, unread counts, and playback-driven updates require #6/media UI; Android behavior is partially covered by #14.
 
-**Exit condition:** the app behaves like an asynchronous video conversation rather than a media browser.
+**Exit condition:** app behaves like an asynchronous conversation rather than an album browser.
 
 ## Phase 4 — shippable V1
 
 ### #9 — push notifications
 
-Notify on publication only, including scheduled publication, through a replaceable push-provider abstraction.
+**Status:** durable publication outbox schema/event generation exists. Push provider, device registration lifecycle, delivery/retry/deep links remain.
 
 ### #10 — self-hosted deployment + full end-to-end proof
 
-Package the app beside Immich and execute the complete V1 acceptance scenario on real infrastructure and required platforms.
+**Status:** not yet complete. Package only after the posting/streaming vertical slice is real enough to exercise the full acceptance scenario.
 
 ## Dependency summary
 
 ```text
-#1 Immich contract -----+------> #4 existing assets ---+
-                       |                              |
-#2 bootstrap -----------+--> #3 auth/schema ----------+--> #6 media delivery --> #8 thread/watch --+
-                       |                              |                                      |
-                       +-----------------------------> #5 local upload ---------------------+--> #10 V1 proof
-                                                                                           |
-#3 + #4/#5 + #6 ----------------------------------------------------------------> #7 schedule --> #9 push --+
+#11 permissions/version ----+
+#12 existing/read/range ----+--> #1 verified Immich adapter --> #4 existing post --> #6 safe streaming --+
+#13 upload/dedup -----------+-------------------------------> #5 local upload -----------------------------+
+                                                                                                             |
+#15 fresh bootstrap --> #2 ----> #3 auth/thread --(#16 runtime)----------------------------------------------+--> #10
+                                   |                                                                         |
+                                   +--> #7 scheduling --(#17 runtime)--> #9 push ----------------------------+
+                                   +-------------------------------> #8 conversation/watch <-- #14 Android --+
 ```
-
-Some work may overlap, but do not let UI progress bypass the authorization and real-Immich contract requirements.
 
 ## After V1
 
-Only after #10 is genuinely passing, prioritize from observed use rather than speculative feature breadth. Likely candidates include:
+Only after #10 genuinely passes, prioritize from observed use: robust background/resumable upload, group polish, reactions/replies, richer Immich search/albums/semantic search, captions/transcription, voice-only messages, migration/import tooling, stronger offline support.
 
-- robust background/resumable mobile upload;
-- group-thread UI polish;
-- reactions and explicit replies;
-- richer Immich picker search/albums/semantic search;
-- captions/transcription;
-- optional voice-only messages;
-- migration/import tooling;
-- stronger offline support.
-
-Do not add separate permanent media storage as a shortcut for any of these.
+Do not add separate permanent media storage as a shortcut for any feature.
