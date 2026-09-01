@@ -1,6 +1,10 @@
 import Fastify from "fastify";
 import multipart from "@fastify/multipart";
-import { UnverifiedImmichProvider, type ImmichMediaProvider } from "@immich-polo/immich-client";
+import {
+  OfficialImmichV3Provider,
+  UnverifiedImmichProvider,
+  type ImmichMediaProvider,
+} from "@immich-polo/immich-client";
 import { registerAuthRoutes } from "./auth/routes.js";
 import { loadConfig } from "./config.js";
 import { checkDatabase, createDatabase } from "./db/client.js";
@@ -28,7 +32,11 @@ export function buildApp(options: BuildAppOptions = {}) {
   const config = loadConfig(env);
   const database = createDatabase(config.databasePath);
   const app = Fastify({ logger: options.logger ?? false });
-  const immichProvider = options.immichProvider ?? new UnverifiedImmichProvider();
+  const immichProvider = options.immichProvider ?? (
+    config.immichProvider === "official-v3"
+      ? new OfficialImmichV3Provider()
+      : new UnverifiedImmichProvider()
+  );
   const credentialCrypto = config.credentialKey ? new CredentialCrypto(config.credentialKey) : null;
 
   app.register(multipart, {
@@ -40,7 +48,7 @@ export function buildApp(options: BuildAppOptions = {}) {
   app.get("/ready", async (_request, reply) => {
     try {
       checkDatabase(database.sqlite);
-      return { ok: true, database: "ready" };
+      return { ok: true, database: "ready", immichProvider: config.immichProvider };
     } catch (error) {
       app.log.error({ err: error }, "readiness check failed");
       return reply.code(503).send({ ok: false, database: "unavailable" });
