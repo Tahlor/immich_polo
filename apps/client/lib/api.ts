@@ -31,10 +31,39 @@ export interface PostSummary {
   }>;
 }
 
+export interface ImmichConnection {
+  id: string;
+  baseUrl: string;
+  immichUserId: string | null;
+  serverVersion: string;
+  lastVerifiedAt: string;
+}
+
+export interface ImmichAsset {
+  id: string;
+  type: "image" | "video";
+  capturedAt: string | null;
+  width: number | null;
+  height: number | null;
+  durationMs: number | null;
+}
+
+export interface ImmichAssetPage {
+  assets: ImmichAsset[];
+  nextCursor: string | null;
+}
+
 export interface AuthResult {
   token: string;
   expiresAt: string;
   user: PublicUser;
+}
+
+export interface LocalUploadFile {
+  uri: string;
+  filename: string;
+  contentType: string;
+  webFile?: Blob;
 }
 
 export const POLO_API_URL = (process.env.EXPO_PUBLIC_POLO_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
@@ -49,7 +78,7 @@ export class PoloApiError extends Error {
 async function requestJson<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
-  if (init.body !== undefined) headers.set("Content-Type", "application/json");
+  if (typeof init.body === "string" && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   const response = await fetch(`${POLO_API_URL}${path}`, { ...init, headers });
@@ -65,6 +94,22 @@ async function requestJson<T>(path: string, init: RequestInit = {}, token?: stri
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
+}
+
+export function bearerHeaders(token: string): Record<string, string> {
+  return { Authorization: `Bearer ${token}` };
+}
+
+export function pickerThumbnailUrl(connectionId: string, assetId: string): string {
+  return `${POLO_API_URL}/immich-connections/${encodeURIComponent(connectionId)}/assets/${encodeURIComponent(assetId)}/thumbnail`;
+}
+
+export function postThumbnailUrl(postId: string, postAssetId: string): string {
+  return `${POLO_API_URL}/posts/${encodeURIComponent(postId)}/assets/${encodeURIComponent(postAssetId)}/thumbnail`;
+}
+
+export function postMediaUrl(postId: string, postAssetId: string): string {
+  return `${POLO_API_URL}/posts/${encodeURIComponent(postId)}/assets/${encodeURIComponent(postAssetId)}/media`;
 }
 
 export async function getHealth(signal?: AbortSignal): Promise<{ ok: boolean; service: string }> {
@@ -102,4 +147,77 @@ export async function createThread(token: string, memberUserIds: string[]): Prom
 
 export async function listPosts(token: string, threadId: string): Promise<PostSummary[]> {
   return (await requestJson<{ posts: PostSummary[] }>(`/threads/${encodeURIComponent(threadId)}/posts`, {}, token)).posts;
+}
+
+export async function listImmichConnections(token: string): Promise<ImmichConnection[]> {
+  return (await requestJson<{ connections: ImmichConnection[] }>("/immich-connections", {}, token)).connections;
+}
+
+export async function createImmichConnection(token: string, baseUrl: string, apiKey: string): Promise<ImmichConnection> {
+  return (await requestJson<{ connection: ImmichConnection }>(
+    "/immich-connections",
+    { method: "POST", body: JSON.stringify({ baseUrl, apiKey }) },
+    token,
+  )).connection;
+}
+
+export async function listImmichAssets(
+  token: string,
+  connectionId: string,
+  options: { type?: "image" | "video"; limit?: number; cursor?: string } = {},
+): Promise<ImmichAssetPage> {
+  const query = new URLSearchParams();
+  if (options.type) query.set("type", options.type);
+  if (options.limit) query.set("limit", String(options.limit));
+  if (options.cursor) query.set("cursor", options.cursor);
+  const suffix = query.size ? `?${query.toString()}` : "";
+  return requestJson(`/immich-connections/${encodeURIComponent(connectionId)}/assets${suffix}`, {}, token);
+}
+
+export async function createPostFromImmich(
+  token: string,
+  threadId: string,
+  input: { connectionId: string; assetId: string; caption?: string; visibleAt?: string },
+): Promise<PostSummary> {
+  return (await requestJson<{ post: PostSummary }>(
+    `/threads/${encodeURIComponent(threadId)}/posts/from-immich`,
+    { method: "POST", body: JSON.stringify(input) },
+    token,
+  )).post;
+}
+
+export async function uploadLocalPost(
+  token: string,
+  threadId: string,
+  connectionId: string,
+  file: LocalUploadFile,
+  options: { capturedAt?: string; visibleAt?: string } = {},
+): Promise<{ post: PostSummary; duplicate: boolean }> {
+  const query = new URLSearchParams();
+  if (options.capturedAt) query.set("capturedAt", options.capturedAt);
+  if (options.visibleAt) query.set("visibleAt", options.visibleAt);
+  const form = new FormData();
+  if (file.webFile) {
+    form.append("file", file.webFile, file.filename);
+  } else {
+    form.append("file", { uri: file.uri, name: file.filename, type: file.contentType } as unknown as Blob);
+  }
+  const result = await requestJson<{ post: PostSummary; upload: { duplicate: boolean } }>(
+    `/threads/${encodeURIComponent(threadId)}/posts/upload/${encodeURIComponent(connectionId)}${query.size ? `?${query.toString()}` : ""}`,
+    { method: "POST", body: form },
+    token,
+  );
+  return { post: result.post, duplicate: result.upload.duplicate };
+}
+
+export async function updatePostView(
+  token: string,
+  postId: string,
+  playbackPositionMs?: number,
+): Promise<void> {
+  await requestJson(
+    `/posts/${encodeURIComponent(postId)}/view`,
+    { method: "PUT", body: JSON.stringify(playbackPositionMs === undefined ? {} : { playbackPositionMs }) },
+    token,
+  );
 }
