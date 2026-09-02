@@ -191,9 +191,10 @@ export async function uploadLocalPost(
   threadId: string,
   connectionId: string,
   file: LocalUploadFile,
-  options: { capturedAt?: string; visibleAt?: string } = {},
+  options: { caption?: string; capturedAt?: string; visibleAt?: string } = {},
 ): Promise<{ post: PostSummary; duplicate: boolean }> {
   const query = new URLSearchParams();
+  if (options.caption?.trim()) query.set("caption", options.caption.trim());
   if (options.capturedAt) query.set("capturedAt", options.capturedAt);
   if (options.visibleAt) query.set("visibleAt", options.visibleAt);
   const form = new FormData();
