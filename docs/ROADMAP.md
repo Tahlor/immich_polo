@@ -1,101 +1,102 @@
 # Implementation roadmap
 
-See also: [`Product plan`](PRODUCT_PLAN.md) · [`Architecture`](ARCHITECTURE.md) · [`API contract`](API_CONTRACT.md) · [`Client`](CLIENT.md) · [`Scheduling/watch`](SCHEDULING.md) · [`Local tests`](LOCAL_TESTS.md)
+See also: [`Two-phone milestone`](M1_TWO_PHONE_VERTICAL_SLICE.md) · [`Next moves`](NEXT_MOVES.md) · [`Issue map`](ISSUE_PLAN.md) · [`Local tests`](LOCAL_TESTS.md)
 
-GitHub issues are the executable backlog. This document records dependency/order **and current implementation state** so agents do not treat every open issue as equally ready. An issue remains open until its full acceptance criteria and required runtime gates pass; code existing is not the same as the issue being done.
+GitHub issues are the executable backlog. Code existing is not the same as runtime acceptance passing.
 
-## Current implementation state
+## Current priority
 
-### Implemented in the repository
+**#19 is the controlling milestone:** two standalone Android APK installs exchange real existing/new Immich media through Polo on Archimedes and prove scheduled publication across restart.
 
-- TypeScript/npm workspace, Fastify API, SQLite migrations/Drizzle schema, Expo universal client, GitHub Actions checks.
-- Polo account registration/login/logout and hashed persistent bearer sessions.
-- User discovery, thread creation/listing, membership authorization, safe post metadata listing.
-- AES-256-GCM Immich credential-sealing primitive, but no real Immich connection route yet.
-- `ImmichMediaProvider` interface that deliberately refuses guessed endpoint behavior.
-- Durable scheduled-post publisher with idempotent notification outbox.
-- Author reschedule/delete controls and persistent per-user seen/video-position/watch state.
-- Native SecureStore session restoration plus register/login/conversation client UI; media controls intentionally gated.
+Generic Docker/self-host polish in #10 follows that proof rather than preceding it.
 
-### Hard blockers / evidence gates
+## Implemented in repository
 
-- The real Immich v3 adapter must be based on #11–#13 runtime evidence, not documentation guesses.
-- Bootstrap/device/auth/scheduler behavior still has explicit local gates #14–#17; see [`LOCAL_TESTS.md`](LOCAL_TESTS.md).
-- Push delivery, media composition/playback, and deployment E2E remain incomplete.
+- TypeScript/npm workspace; Fastify API; SQLite migrations/Drizzle schema; Expo universal client.
+- Polo accounts, hashed bearer sessions, native SecureStore restoration, user discovery, direct/group-ready threads, membership authorization.
+- encrypted per-user Immich credentials and owner-only connection routes.
+- opt-in `OfficialImmichV3Provider` for current official v3 version/user/search/metadata/thumbnail/video-playback/upload operations.
+- fail-closed `IMMICH_PROVIDER=unverified` default until target-server evidence passes.
+- existing Immich picker metadata + authenticated thumbnails.
+- existing-asset posting without copying canonical media.
+- streamed multipart local/device upload into Immich, canonical asset re-fetch/reference, duplicate-aware result.
+- post-scoped image/video proxy, recipient authorization, HTTP Range forwarding for video.
+- durable scheduler, idempotent notification outbox, author reschedule/delete, watch/resume state.
+- Android client paths for Immich setup, existing picker, phone gallery, camera video recording, image/video rendering, seeking/watch updates, captions, and simple scheduling.
+- stable Android package identity and EAS preview APK profile.
+- Archimedes systemd/nginx/env/SQLite backup/restore templates.
 
-## Phase 0 — prove assumptions and establish workspace
+## Runtime gates
 
-### #1 — Immich v3 integration contract
+### #11 — Immich version + minimum API-key permissions
 
-**Status:** provider interface exists; endpoint implementation is intentionally blocked on #11 (version/permissions), #12 (read/range/deletion), and #13 (upload/dedup/readiness).
+**Code state:** concrete v3 adapter exists.
 
-### #2 — TypeScript monorepo bootstrap
+**Gate:** Archimedes must prove the exact deployed v3 version and least-privilege permissions. Do not broaden permissions to hide a failed operation.
 
-**Status:** implementation is substantially present. Do not close until remote CI is green for current `master` and #14/#15 runtime/bootstrap checks pass or any discovered defects are fixed.
+### #12 — existing media / thumbnail / video ranges
 
-**Exit condition:** workspace is reproducibly runnable and Immich boundary is based on observed behavior rather than guesses.
+**Code state:** search, picker thumbnail, post media proxy, Android playback/seek are implemented against the v3 contract.
 
-## Phase 1 — first complete posting slice
+**Gate:** prove pagination, thumbnail semantics, middle/repeated Range responses, missing/deleted media, and public nginx behavior on the real server.
 
-### #3 — core schema, accounts, threads, authorization
+### #13 — upload / duplicate / processing readiness
 
-**Status:** schema, Polo auth/sessions, user discovery, thread membership authorization, credential crypto, and negative API tests are implemented. #16 proves persistent runtime behavior. Immich-connection ownership/routes remain pending the verified provider contract.
+**Code state:** phone/camera bytes stream Polo -> provider -> Immich; Polo stores canonical returned asset reference.
 
-### #4 — existing Immich media picker + posting
+**Gate:** prove exact multipart behavior, duplicate semantics, readiness timing, interrupted upload cleanup/retry, and retrieval of canonical media on Archimedes.
 
-**Status:** client/thread structure and provider abstraction are ready; blocked on #11/#12 before endpoint-specific implementation.
+### #14 / #20 — physical standalone Android
 
-### #5 — local/recorded media upload to Immich
+**Code state:** native client and APK build profile exist.
 
-**Status:** post/schema boundaries are ready; blocked on #11/#13 before upload semantics are encoded.
+**Gate:** build an actual APK, install it on physical Android devices, prove SecureStore persistence, media actions, server outage recovery, and later upgrade behavior. Expo Go does not count.
 
-**Exit condition:** two users exchange posts backed by old Immich media and new local media without Polo storing originals.
+### #15 / #16 / #17 — bootstrap/auth/scheduler runtime
 
-## Phase 2 — safe media consumption
+Fresh clone/install, persistent multi-user authorization, and restart/race scheduling evidence remain explicit runtime gates even though their application code exists.
 
-### #6 — authorized thumbnails/video streaming
+### #18 — Archimedes deployment
 
-**Status:** authorization model exists, but media routes are blocked on #12. Recipient access must begin from Polo thread/post/PostAsset authorization and preserve real byte-range semantics.
+**Code state:** reusable deployment templates exist under `deploy/archimedes/` plus [`DEPLOYMENT_ARCHIMEDES.md`](DEPLOYMENT_ARCHIMEDES.md).
 
-**Exit condition:** recipient smoothly watches referenced media without sender credentials or unrelated-library access.
-
-## Phase 3 — Marco-Polo behavior
-
-### #7 — durable scheduling
-
-**Status:** transactional due-post publication, server-time worker, unique notification outbox, author reschedule/delete APIs are implemented. #17 is the restart/race/invisibility runtime gate. Actual push sending remains #9.
-
-### #8 — continuous thread + watch/unread state
-
-**Status:** server PostView persistence/completion rules and metadata thread UI exist. Actual video playback, first-unread flow, unread counts, and playback-driven updates require #6/media UI; Android behavior is partially covered by #14.
-
-**Exit condition:** app behaves like an asynchronous conversation rather than an album browser.
-
-## Phase 4 — shippable V1
+**Gate:** local agent works on **Archimedes**, verifies port/path/Node version, installs systemd/nginx/local SQLite, and uses local Immich origin `http://127.0.0.1:2283`. Pi3 stays storage only.
 
 ### #9 — push notifications
 
-**Status:** durable publication outbox schema/event generation exists. Push provider, device registration lifecycle, delivery/retry/deep links remain.
+Notification outbox exists; provider/device registration/retry/deep-link delivery remains implementation work.
 
-### #10 — self-hosted deployment + full end-to-end proof
+### #21 — invite onboarding
 
-**Status:** not yet complete. Package only after the posting/streaming vertical slice is real enough to exercise the full acceptance scenario.
+Manual household bootstrap secret works, but normal invitees should eventually use short-lived single-use invite codes/deep links. This follows the core media loop unless onboarding itself blocks the second tester.
 
-## Dependency summary
+### #10 — generalized self-host V1
+
+Package/document generic deployment only after #19 proves the real behavior. Reuse the same media/auth/scheduling invariants rather than building a second architecture.
+
+## Execution order
 
 ```text
-#11 permissions/version ----+
-#12 existing/read/range ----+--> #1 verified Immich adapter --> #4 existing post --> #6 safe streaming --+
-#13 upload/dedup -----------+-------------------------------> #5 local upload -----------------------------+
-                                                                                                             |
-#15 fresh bootstrap --> #2 ----> #3 auth/thread --(#16 runtime)----------------------------------------------+--> #10
-                                   |                                                                         |
-                                   +--> #7 scheduling --(#17 runtime)--> #9 push ----------------------------+
-                                   +-------------------------------> #8 conversation/watch <-- #14 Android --+
+#11 version/permissions -----+
+#12 search/thumb/range ------+--> enable official-v3 on #18 Archimedes deployment
+#13 upload/dedup/readiness --+                         |
+                                                       v
+#20 standalone APK --> #14 physical Android -------> #19 TWO-PHONE MEDIA LOOP
+                                                       |
+#16 auth persistence ---------------------------------+
+#17 scheduler restart --------------------------------+
+                                                       |
+                                                       +--> #9 push/deep links
+                                                       +--> #21 invite UX
+                                                       +--> #10 generic packaging
 ```
+
+## Verification
+
+Repository CI must be green for the tested SHA, but CI does not substitute for #11–#20 runtime evidence. Every real-server/device failure reports the first failed transition and one of PASS / FAIL / BLOCKED / NOT_DUE / ATTEMPTED_UNVERIFIED / INCOMPLETE_EVIDENCE.
 
 ## After V1
 
-Only after #10 genuinely passes, prioritize from observed use: robust background/resumable upload, group polish, reactions/replies, richer Immich search/albums/semantic search, captions/transcription, voice-only messages, migration/import tooling, stronger offline support.
+Prioritize from observed use: upload progress/retry, robust background/resumable upload, unread/sequential playback polish, group UX, richer Immich search, reactions/replies, captions/transcription, voice-only posts, offline support, migration/import tooling.
 
-Do not add separate permanent media storage as a shortcut for any feature.
+Never add separate permanent media storage as a shortcut.
