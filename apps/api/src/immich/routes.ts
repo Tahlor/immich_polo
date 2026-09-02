@@ -46,7 +46,10 @@ export function registerImmichRoutes(
   sqlite: Database.Database,
   provider: ImmichMediaProvider,
   crypto: CredentialCrypto | null,
+  allowedBaseUrls: string[] = [],
 ): void {
+  const allowedOrigins = new Set(allowedBaseUrls.map(normalizeBaseUrl));
+
   app.get("/immich-connections", async (request, reply) => {
     const user = requireUser(request, reply, sqlite);
     if (!user) return;
@@ -69,6 +72,10 @@ export function registerImmichRoutes(
     if (!parsed.success) return reply.code(400).send({ error: "invalid_request" });
 
     const baseUrl = normalizeBaseUrl(parsed.data.baseUrl);
+    if (allowedOrigins.size > 0 && !allowedOrigins.has(baseUrl)) {
+      return reply.code(403).send({ error: "immich_base_url_not_allowed" });
+    }
+
     let info;
     try {
       info = await provider.verifyConnection({ baseUrl, apiKey: parsed.data.apiKey });
