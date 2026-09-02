@@ -1,86 +1,90 @@
 # API contract
 
-See also: [`Product plan`](PRODUCT_PLAN.md) · [`Architecture`](ARCHITECTURE.md) · [`Scheduling/watch`](SCHEDULING.md) · [`Development`](DEVELOPMENT.md) · [`Roadmap`](ROADMAP.md)
+See also: [`Two-phone milestone`](M1_TWO_PHONE_VERTICAL_SLICE.md) · [`Architecture`](ARCHITECTURE.md) · [`Immich v3 contract`](IMMICH_V3_CONTRACT.md) · [`Client`](CLIENT.md) · [`Scheduling/watch`](SCHEDULING.md)
 
-This file distinguishes routes that exist **now** from planned routes so clients and agents do not code against documentation fiction.
+This file describes routes that exist in current code. Real Immich behavior remains gated by #11–#13 and the runtime provider selection.
 
-## Authentication model implemented now
+## Authentication
 
-Polo has its own accounts. Usernames are normalized to lowercase; passwords are hashed with Node's `scrypt`; successful registration/login returns a random bearer token. Only a SHA-256 hash of that session token is stored in SQLite. Sessions expire after `SESSION_TTL_DAYS` (30 by default).
+Polo has its own accounts. Usernames are normalized to lowercase; passwords are hashed with Node `scrypt`; registration/login returns a random bearer token while SQLite stores only its SHA-256 hash. Sessions expire after `SESSION_TTL_DAYS` (30 by default).
 
-Self-hosted account creation is intentionally simple for V1: `POST /auth/register` requires the server-held `POLO_REGISTRATION_SECRET`. Use HTTPS for any non-local deployment. The registration secret and returned session token are credentials and must never be logged or committed.
+`POST /auth/register` currently requires the server-held `POLO_REGISTRATION_SECRET`. It is bootstrap plumbing, not Universal SSO.
 
-### `POST /auth/register`
-Body: `registrationSecret`, `username`, `displayName`, `password` (minimum 10 characters). Returns `201` with `{ token, expiresAt, user }`.
+- `POST /auth/register` — `registrationSecret`, `username`, `displayName`, `password`; returns `{token, expiresAt, user}`.
+- `POST /auth/login` — username/password session creation.
+- `GET /auth/me` — current user.
+- `POST /auth/logout` — deletes current session, `204`.
+- `GET /users` — public Polo user directory for the small self-hosted instance.
 
-### `POST /auth/login`
-Body: `username`, `password`. Returns `{ token, expiresAt, user }` or `401`.
+## Health/core/thread
 
-### `GET /auth/me`
-Bearer auth required. Returns current public user.
+- `GET /health` — liveness.
+- `GET /ready` — SQLite readiness plus configured Immich provider name.
+- `GET /threads` — only current-user threads.
+- `POST /threads` — create thread; current user always included.
+- `GET /threads/:threadId/posts` — membership required; members see published posts and an author also sees their own scheduled posts. Raw Immich asset IDs/credentials are not returned.
 
-### `POST /auth/logout`
-Bearer auth required. Deletes the current session and returns `204`.
+## Immich connection and picker routes
 
-### `GET /users`
-Bearer auth required. Returns only public IDs/display names/usernames for the small self-hosted user set.
+All require Polo bearer authentication. Stored API credentials are encrypted using `POLO_CREDENTIAL_KEY` and are never returned by these routes.
 
-## Core/thread routes implemented now
+### `GET /immich-connections`
+Lists only the current user's connection metadata.
 
-### `GET /health`
-Liveness only.
+### `POST /immich-connections`
+Body: `baseUrl`, `apiKey`. The selected provider must successfully verify the connection before Polo encrypts/stores the key. With the default `IMMICH_PROVIDER=unverified`, this fails closed; a validated deployment selects `official-v3`.
 
-### `GET /ready`
-Checks SQLite connectivity and migration state.
+### `GET /immich-connections/:connectionId/assets`
+Connection-owner only. Query: optional `type=image|video`, `limit`, `cursor`. Returns safe picker metadata only.
 
-### `GET /threads`
-Bearer auth required. Lists only threads containing current user, with members.
+### `GET /immich-connections/:connectionId/assets/:assetId/thumbnail`
+Connection-owner only. Proxies an authenticated picker thumbnail from the exact stored connection. Upstream headers are allowlisted.
 
-### `POST /threads`
-Bearer auth required. Body: optional `title`, `memberUserIds`; current user is always included.
+## Post creation/media
 
-### `GET /threads/:threadId/posts`
-Bearer auth + membership required. Published posts are visible to members; an author additionally sees their own scheduled posts. Raw Immich asset IDs/connection credentials are not returned.
+### `POST /threads/:threadId/posts/from-immich`
+Thread member + connection owner required. Body: `connectionId`, `assetId`, optional `caption`, optional future `visibleAt`. Polo re-fetches asset metadata server-side rather than trusting client metadata. Existing media is referenced; it is not copied.
 
-## Scheduling/watch routes implemented now
+### `POST /threads/:threadId/posts/upload/:connectionId`
+Thread member + connection owner required. Exactly one multipart image/video file. Optional query parameters: `caption`, `capturedAt`, `visibleAt`.
 
-### `PATCH /posts/:postId/schedule`
-Author only. Reschedules an existing `scheduled` post to a future absolute `visibleAt`. Published/cancelled/failed posts cannot be rescheduled through this route.
+The API streams file bytes into the selected provider rather than buffering the complete media. After Immich returns a canonical/duplicate asset ID, Polo re-fetches that asset and creates the post using the canonical reference.
 
-### `DELETE /posts/:postId`
-Author only. Deletes Polo metadata and **never calls Immich to delete the canonical media**.
+### `GET /posts/:postId/assets/:postAssetId/thumbnail`
+Authorizes the Polo post/post-asset first, then resolves the exact stored Immich connection. A recipient cannot use an arbitrary Immich asset ID as authorization.
 
-### `PUT /posts/:postId/view`
-Thread member + published post required. Optional body `playbackPositionMs`. Records first-seen state and video resume position; images become seen immediately, while videos use the documented server-side completion rule in [`SCHEDULING.md`](SCHEDULING.md).
+### `GET /posts/:postId/assets/:postAssetId/media`
+Same authorization boundary. Images currently use the provider preview stream; videos use Immich playback and forward the incoming HTTP `Range` header. Only safe media headers are forwarded.
 
-The production server also runs the durable publication worker described in [`SCHEDULING.md`](SCHEDULING.md); publication writes a durable notification outbox event but does not send push yet.
+A recipient receives `404` for scheduled media before publication; the author may inspect their own scheduled media.
 
-## Planned media/application surface
+## Scheduling/watch
 
-Pending the verified Immich boundary and later milestones:
+- `PATCH /posts/:postId/schedule` — author-only future reschedule of a scheduled post.
+- `DELETE /posts/:postId` — author-only Polo metadata delete; never calls Immich delete.
+- `PUT /posts/:postId/view` — published-post member view/watch state; optional `playbackPositionMs`.
 
-```text
-POST   /threads/:threadId/posts/from-immich
-POST   /threads/:threadId/posts/upload
-POST   /immich-connections
-GET    /immich-connections/:id/status
-GET    /immich-connections/:id/assets
-GET    /posts/:postId/assets/:postAssetId/thumbnail
-GET    /posts/:postId/assets/:postAssetId/media
-```
+The server publication worker persists exactly one notification-outbox event per publication, but actual push delivery remains #9.
+
+## Provider behavior
+
+`IMMICH_PROVIDER` has two supported values:
+
+- `unverified` — default/fail-closed; media provider operations return `immich_integration_unverified`.
+- `official-v3` — concrete HTTP implementation of the official Immich v3 surface documented in [`IMMICH_V3_CONTRACT.md`](IMMICH_V3_CONTRACT.md).
+
+The existence of `official-v3` code is **not** evidence that the target server passed. Archimedes #11–#13 remain authoritative for version, minimum permissions, search pagination, thumbnail/video behavior, upload/dedupe, and processing readiness.
 
 ## Mandatory authorization invariants
 
-1. Authentication establishes acting Polo `user_id`; clients never select arbitrary acting identity.
-2. Thread reads/writes require current membership.
-3. Author-only Immich browsing/upload operations require ownership of selected `ImmichConnection`.
-4. Recipient media reads start from authorized **Polo post + PostAsset** and resolve exact connection/asset server-side.
-5. Caller-supplied or guessed `immich_asset_id` alone can never authorize media retrieval.
-6. Scheduled posts are absent from recipient list/detail/media/view APIs until publication; author may see their own scheduled card.
-7. Deleting a Polo post deletes Polo metadata only unless a future separately-confirmed operation explicitly says otherwise.
+1. Bearer authentication establishes acting Polo user; the client never chooses another acting identity.
+2. Thread reads/writes require membership.
+3. Immich browsing/upload requires ownership of the chosen connection.
+4. Recipient media reads begin from an authorized Polo post + PostAsset and resolve connection/asset server-side.
+5. A guessed `immich_asset_id` alone never authorizes retrieval.
+6. Scheduled posts/media are hidden from recipients until publication.
+7. Polo metadata deletion does not delete canonical Immich media.
 
-## Error behavior requirements
+## Errors
 
-Current routes use `400` for invalid input, `401` for missing/invalid sessions, `403` for authorization/registration-secret failures, `404` for missing or recipient-hidden resources, `409` for invalid state/collisions, and `503` when registration is disabled or readiness fails.
-
-Future Immich routes must normalize missing media, upstream unavailability, and processing-not-ready states. Do not freeze exact Immich-derived status mapping until issues #11–#13 provide real-server evidence.
+Polo uses normal `400/401/403/404/409` application errors, `503` for deliberately unconfigured/fail-closed integration, and `502` for unexpected Immich upstream failures. Exact handling for processing-not-ready/missing upstream media may be refined from #11–#13 evidence rather than guessed.
