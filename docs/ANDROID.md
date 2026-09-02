@@ -1,6 +1,6 @@
 # Android client
 
-See also: [`Two-phone milestone`](M1_TWO_PHONE_VERTICAL_SLICE.md) · [`Client behavior`](CLIENT.md) · [`Archimedes deployment`](../issues/18)
+See also: [`Two-phone milestone`](M1_TWO_PHONE_VERTICAL_SLICE.md) · [`Client behavior`](CLIENT.md) · [`Archimedes deployment`](DEPLOYMENT_ARCHIMEDES.md)
 
 Android is the primary V1 client surface. The product must be installable as a standalone app; Expo Go is development tooling, not the release experience.
 
@@ -49,7 +49,7 @@ The exact underlying Immich behavior remains subject to runtime validation in #1
 
 ## Physical-device acceptance
 
-Issue #14 is the authoritative physical Android evidence ticket. It must eventually include:
+Issue #14 is the authoritative physical Android evidence ticket, while #20 owns the distributable APK artifact. Together they must eventually include:
 
 1. clean APK install;
 2. account login and SecureStore session restoration after process/app restart;
@@ -61,4 +61,4 @@ Issue #14 is the authoritative physical Android evidence ticket. It must eventua
 8. notification/deep-link behavior when #9 lands;
 9. upgrade install over the previous APK without losing the Polo session unless intentionally invalidated.
 
-Use exact APK/app version and deployed server SHA in evidence.
+Use exact APK/app version and deployed server SHA in evidence. The full two-phone acceptance gate is #19.
