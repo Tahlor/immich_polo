@@ -22,6 +22,7 @@ export interface BuildAppOptions {
   registrationSecret?: string;
   credentialKey?: string;
   immichProvider?: ImmichMediaProvider;
+  immichAllowedBaseUrls?: string[];
 }
 
 export function buildApp(options: BuildAppOptions = {}) {
@@ -29,6 +30,7 @@ export function buildApp(options: BuildAppOptions = {}) {
   if (options.databasePath) env.DATABASE_PATH = options.databasePath;
   if (options.registrationSecret) env.POLO_REGISTRATION_SECRET = options.registrationSecret;
   if (options.credentialKey) env.POLO_CREDENTIAL_KEY = options.credentialKey;
+  if (options.immichAllowedBaseUrls) env.IMMICH_ALLOWED_BASE_URLS = options.immichAllowedBaseUrls.join(",");
   const config = loadConfig(env);
   const database = createDatabase(config.databasePath);
   const app = Fastify({ logger: options.logger ?? false });
@@ -58,7 +60,7 @@ export function buildApp(options: BuildAppOptions = {}) {
   registerAuthRoutes(app, database.sqlite, config);
   registerThreadRoutes(app, database.sqlite);
   registerPostRoutes(app, database.sqlite);
-  registerImmichRoutes(app, database.sqlite, immichProvider, credentialCrypto);
+  registerImmichRoutes(app, database.sqlite, immichProvider, credentialCrypto, config.immichAllowedBaseUrls);
   registerExistingImmichPostRoute(app, database.sqlite, immichProvider, credentialCrypto);
   registerLocalUploadRoute(app, database.sqlite, immichProvider, credentialCrypto);
   registerMediaRoutes(app, database.sqlite, immichProvider, credentialCrypto);
