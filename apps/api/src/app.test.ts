@@ -17,10 +17,10 @@ describe("API bootstrap", () => {
     expect(response.json()).toEqual({ ok: true, service: "immich-polo-api" });
   });
 
-  it("reports database readiness", async () => {
+  it("reports database readiness and configured provider state", async () => {
     ({ app } = buildApp({ databasePath: ":memory:" }));
     const response = await app.inject({ method: "GET", url: "/ready" });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ ok: true, database: "ready" });
+    expect(response.json()).toEqual({ ok: true, database: "ready", immichProvider: "unverified" });
   });
 });
