@@ -1,43 +1,64 @@
 # Client behavior and security
 
-See also: [`Product plan`](PRODUCT_PLAN.md) · [`API contract`](API_CONTRACT.md) · [`Scheduling/watch`](SCHEDULING.md) · [`Development`](DEVELOPMENT.md) · [`Roadmap`](ROADMAP.md)
+See also: [`Two-phone milestone`](M1_TWO_PHONE_VERTICAL_SLICE.md) · [`Android`](ANDROID.md) · [`API contract`](API_CONTRACT.md) · [`Immich v3 contract`](IMMICH_V3_CONTRACT.md) · [`Scheduling/watch`](SCHEDULING.md)
+
+## Product surface
+
+Android is the primary V1 client and must be distributed as a standalone APK. Web/PWA remains a secondary surface from the same Expo codebase; iOS shares the implementation unless a documented platform limitation remains.
+
+Universal SSO is **not** required for normal Polo API access. Polo owns its accounts and bearer sessions.
 
 ## Implemented client slice
 
-The Expo application now supports the Polo-owned part of the product end to end:
+The Expo application currently implements:
 
-- account registration against the server-side household registration secret;
-- login, session restoration, and logout;
-- user discovery;
-- conversation creation and listing;
-- opening a thread and listing currently-visible posts plus the author's own scheduled posts;
-- explicit disabled Gallery/Record affordances while the Immich adapter remains intentionally unverified.
+- account registration against the server-side household bootstrap secret;
+- login, native session restoration, and logout;
+- user discovery plus direct-conversation creation/listing;
+- visible thread posts plus the author's scheduled posts;
+- per-user Immich connection setup using a permission-scoped API key;
+- authenticated existing-Immich asset browsing with thumbnails;
+- posting an existing asset immediately or at a future time;
+- device photo/video selection;
+- camera video capture;
+- multipart upload through Polo into the connected Immich account;
+- authorized image rendering;
+- bearer-authenticated video playback and seeking on the native app;
+- playback-position updates to Polo watch state.
 
-The UI must not invent fake media behavior. Gallery, recording/upload, thumbnails, and playback become enabled only as their corresponding server routes land after issues #11–#13.
+These application paths exist in code, but the production server remains fail-closed by default with `IMMICH_PROVIDER=unverified`. Issues #11–#13 must validate the actual Archimedes Immich v3 server before #18 enables `official-v3` in production.
 
 ## Session storage
 
-Native Android/iOS stores the raw bearer session token using `expo-secure-store`, which uses platform protected storage. The API stores only the SHA-256 hash of this token.
+Native Android/iOS stores the raw bearer session token using `expo-secure-store`; the API stores only the SHA-256 hash of the token.
 
-Web deliberately uses `sessionStorage`, not persistent `localStorage`, for the V1 bearer token. This means a reload in the same tab can preserve the session, while closing the tab/browser may require login again. This is an intentional conservative compromise until web authentication moves to an HttpOnly-cookie model or another hardened mechanism.
+Web deliberately uses `sessionStorage`, not persistent `localStorage`, for the V1 bearer token. Closing the browser/tab can therefore require login again. A future hardened web-cookie model can improve that without changing native authentication.
 
-Never place `POLO_REGISTRATION_SECRET` in Expo environment/config. It is a household setup credential entered by a user during registration and sent only to the API over HTTPS.
+Never place `POLO_REGISTRATION_SECRET` or an Immich API key in Expo build-time environment/config.
 
-## Network behavior
+## Media authorization
 
-`EXPO_PUBLIC_POLO_API_URL` is the only current public client configuration value. A physical phone must be able to resolve/reach it. Use HTTPS outside trusted local development networks.
+The client does not receive another user's Immich credential. Existing-library thumbnails are available only for the current user's own stored connection. Once media is posted, recipients request it using Polo `postId + postAssetId`; Polo authorizes thread visibility first and resolves the exact Immich connection/asset server-side.
 
-The client treats API error codes as user-facing state rather than assuming connectivity. Invalid/expired restored sessions are cleared locally.
+Native video sources send the Polo bearer token as a request header so seeking continues to use the authorized Polo proxy. Real Range behavior still requires #12 plus the public nginx/device test.
 
-## Immediate next UI unlocks
+The web/PWA media surface is secondary. Browser-native media elements cannot always attach the same custom Authorization headers as Android/iOS playback; do not claim parity until the web path is verified or replaced with a short-lived signed-media URL/cookie design.
 
-Once the verified Immich provider exists:
+## Composition
 
-1. connect an Immich account;
-2. enable Gallery backed by existing Immich assets;
-3. enable Record/device-local selection and stream upload into Immich;
-4. replace metadata-only post cards with authorized thumbnails/video playback;
-5. wire view-position updates from actual video playback;
-6. expose Send now / Schedule beside composition.
+The current composer offers:
 
-Physical Android behavior is tracked in #14; multi-user API persistence/authorization in #16; media behavior remains #11–#13.
+- **Immich** — select an existing canonical asset;
+- **Phone** — select local device media and upload it into Immich;
+- **Record** — capture a new video and upload it into Immich;
+- optional caption;
+- immediate send or a simple delay-in-minutes schedule control.
+
+The delay control is sufficient for the first vertical slice. A polished date/time picker can replace it later without changing the server's absolute-instant scheduling contract.
+
+## Runtime configuration
+
+- `EXPO_PUBLIC_POLO_API_URL` — public HTTPS Polo API origin.
+- `EXPO_PUBLIC_DEFAULT_IMMICH_URL` — optional connection-form default. For the Archimedes-targeted build this may be `http://127.0.0.1:2283`; the value is consumed by the Polo server after submission, not contacted directly by the phone.
+
+Physical Android evidence belongs in #14/#20; the full two-phone product gate is #19.
