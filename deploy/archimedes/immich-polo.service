@@ -1,0 +1,22 @@
+[Unit]
+Description=Immich Polo API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/Projects/immich_polo
+EnvironmentFile=/etc/immich-polo/immich-polo.env
+ExecStart=/usr/bin/npm run start --workspace @immich-polo/api
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/immich-polo /home/ubuntu/Projects/immich_polo
+
+[Install]
+WantedBy=multi-user.target
