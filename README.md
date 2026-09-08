@@ -10,6 +10,8 @@ The near-term product gate is **[#19: two standalone Android phones exchange rea
 
 Android is the primary V1 client. Web/PWA is secondary. Polo uses its own accounts and bearer sessions; **Universal SSO is not required for the native app/API**.
 
+For the UX-first finish plan for roughly twelve users, see [`docs/MVP_FINISH_PLAN.md`](docs/MVP_FINISH_PLAN.md). It separates the household Android release from broader V1 distribution/platform work; #19 remains the first real-media gate.
+
 ## Current status
 
 Current `master` contains:
@@ -70,7 +72,7 @@ V1 lets a user:
 
 ## Quick start
 
-Requires Node.js 22.13+.
+Requires Node.js 22.14+ (the repository/CI baseline).
 
 ```bash
 npm install

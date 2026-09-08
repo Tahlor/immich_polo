@@ -28,6 +28,21 @@ The Expo application currently implements:
 
 These application paths exist in code, but the production server remains fail-closed by default with `IMMICH_PROVIDER=unverified`. Issues #11–#13 must validate the actual Archimedes Immich v3 server before #18 enables `official-v3` in production.
 
+## Known gaps at the 2026-09-08 audit
+
+The [MVP finish plan](MVP_FINISH_PLAN.md) distinguishes code-present paths from a complete user experience. Currently:
+
+- choosing a library/phone/camera item immediately posts/uploads it; there is no shared preview + explicit Send step;
+- local phone/camera uploads omit the entered caption, although the API supports it;
+- playback position is written but not read/restored by the player; no unread summaries/Next flow is wired;
+- images report seen on mount rather than successful visible rendering;
+- transient startup/home-load failure clears the stored session; manual refresh errors are not handled;
+- responses and drafts are not isolated when switching conversations;
+- reschedule/delete routes have no client controls, and media loading/error/processing recovery is unfinished;
+- the thread is an unbounded ScrollView with manual refresh and its composer below the history.
+
+These source-inspection findings are planned work, not claimed runtime test results.
+
 ## Session storage
 
 Native Android/iOS stores the raw bearer session token using `expo-secure-store`; the API stores only the SHA-256 hash of the token.

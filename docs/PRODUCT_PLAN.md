@@ -12,6 +12,14 @@ An existing Immich asset is referenced without copying it. A new device-local re
 
 Capture time and publication time are independent. A years-old Immich video can be posted today, and a post can be scheduled for future publication after its media has already been uploaded to Immich.
 
+## Household MVP before broader V1
+
+The [2026-09-08 audit and finish plan](MVP_FINISH_PLAN.md) defines an intermediate release for roughly twelve users on the existing Archimedes installation. Assuming those users can use Android, prioritize a complete standalone Android conversation experience over generic Docker packaging or browser/iOS parity. If a required participant needs another platform, include it in the household release gate.
+
+Deliberate preview/Send, upload feedback and recovery, unread/resume/next-media behavior, useful error states, sender schedule controls, humane invitations and push notifications are household MVP requirements—not post-V1 polish. One asset per post, direct conversations, foreground uploads and admin-assisted account recovery are sufficient.
+
+The broader V1 platform/deployment requirements below remain tracked; this narrower household milestone does not mark them complete.
+
 ## Current controlling milestone
 
 The immediate target is [`M1_TWO_PHONE_VERTICAL_SLICE.md`](M1_TWO_PHONE_VERTICAL_SLICE.md): **two independently installed Android APKs exchange a real older Immich asset and a newly recorded/uploaded asset through Polo on Archimedes, then prove scheduled publication across a server restart.**
@@ -76,7 +84,7 @@ If the Immich upload fails, a published Polo post must not be created.
 3. Images become seen when rendered.
 4. Video playback reports position; server determines completion using the shared completion rule.
 5. Seeking must use HTTP byte-range behavior without exposing sender Immich credentials.
-6. Unread/sequential playback polish follows the functional media loop.
+6. Unread/resume and simple sequential consumption follow the functional media loop but must be finished before household MVP release.
 
 ## Authentication and onboarding
 

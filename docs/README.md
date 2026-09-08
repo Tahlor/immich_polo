@@ -6,12 +6,15 @@
 
 Do not prioritize generalized deployment polish ahead of that milestone unless it directly unblocks the two-phone scenario.
 
+[`MVP_FINISH_PLAN.md`](MVP_FINISH_PLAN.md) records the 2026-09-08 source audit and UX-first household release plan: deliberate sending, reliable conversations/unread/resume, recovery, invitations and notifications. It is a plan, not evidence of shipped behavior or runtime acceptance.
+
 ## Source-of-truth map
 
 | Document | Purpose |
 | --- | --- |
 | [`../README.md`](../README.md) | Product summary, current implementation status, quick start |
 | [`M1_TWO_PHONE_VERTICAL_SLICE.md`](M1_TWO_PHONE_VERTICAL_SLICE.md) | Current execution order and two-phone acceptance gate |
+| [`MVP_FINISH_PLAN.md`](MVP_FINISH_PLAN.md) | Audited gaps, household MVP boundary, ordered delivery slices and user acceptance script |
 | [`PRODUCT_PLAN.md`](PRODUCT_PLAN.md) | User flows, requirements, V1 acceptance scenario, scope |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Technical boundaries, security invariants, data flow |
 | [`IMMICH_V3_CONTRACT.md`](IMMICH_V3_CONTRACT.md) | Concrete official-v3 provider contract and real-server validation gates |

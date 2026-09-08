@@ -4,7 +4,7 @@ See also: [`README`](../README.md) · [`Product plan`](PRODUCT_PLAN.md) · [`Arc
 
 ## Prerequisites
 
-- Node.js 22.13+ (Expo SDK 57 requires Node 22.13+).
+- Node.js 22.14+ (matches the root package engine and the CI Node 22.14.0 baseline).
 - npm.
 - A real disposable/test Immich v3 server is required only for integration-contract issues #11–#13; the repository must otherwise build without Immich.
 
@@ -46,12 +46,12 @@ For a physical phone, `localhost` means the phone itself. Set `EXPO_PUBLIC_POLO_
 - Registration requires `POLO_REGISTRATION_SECRET`; do not expose it in a client bundle or commit it.
 - Passwords are stored only as `scrypt` hashes.
 - Login/registration returns a high-entropy bearer session token; SQLite stores only its SHA-256 hash.
-- V1 clients must treat the raw token as a credential. Persistent mobile storage should use platform secure storage when the login UI is implemented.
+- Clients must treat the raw token as a credential. Native login/session persistence uses Expo SecureStore; web uses sessionStorage. See `CLIENT.md` for the current recovery gaps.
 - Use HTTPS outside trusted localhost/private development environments.
 
 ## Credential encryption
 
-Before storing a real Immich API key, configure `POLO_CREDENTIAL_KEY` as base64 for exactly 32 random bytes. The current code provides an AES-256-GCM sealing boundary and tests it, but Immich connection routes remain blocked on the verified contract work.
+Before storing a real Immich API key, configure `POLO_CREDENTIAL_KEY` as base64 for exactly 32 random bytes. The current code provides AES-256-GCM sealing and owner-only connection routes. Real-server acceptance remains gated by #11–#13; the default provider fails closed.
 
 ## Database migrations
 
@@ -61,7 +61,7 @@ When the schema changes, run Drizzle Kit locally to generate the candidate migra
 
 ## Immich integration rule
 
-`packages/immich-client` deliberately has **no guessed endpoint implementation** yet. Runtime evidence is split across #11 (version/permissions), #12 (read/range behavior), and #13 (upload/dedup/readiness). Once those are proven, encode endpoint behavior only inside that package.
+`packages/immich-client` contains an opt-in `OfficialImmichV3Provider`, but its existence is not a verified runtime contract. Runtime evidence is split across #11 (version/permissions), #12 (read/range behavior), and #13 (upload/dedup/readiness). Keep endpoint details inside that package, keep the default fail-closed provider, and do not add guessed endpoint-specific behavior in place of real-server evidence.
 
 ## What counts as verified
 

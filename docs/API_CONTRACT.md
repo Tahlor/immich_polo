@@ -24,6 +24,8 @@ Polo has its own accounts. Usernames are normalized to lowercase; passwords are 
 - `POST /threads` — create thread; current user always included.
 - `GET /threads/:threadId/posts` — membership required; members see published posts and an author also sees their own scheduled posts. Raw Immich asset IDs/credentials are not returned.
 
+Current read limitations: thread lists are ordered by thread creation, post lists by post creation (not publication). Responses do not include current-user PostView, unread counts or latest-post summaries. `PUT /posts/:postId/view` persists/returns view state, but there is no read-back route wired into client resume. Correct chronology and read-state summaries are planned in #8; do not treat them as implemented.
+
 ## Immich connection and picker routes
 
 All require Polo bearer authentication. Stored API credentials are encrypted using `POLO_CREDENTIAL_KEY` and are never returned by these routes.
@@ -65,6 +67,10 @@ A recipient receives `404` for scheduled media before publication; the author ma
 - `PUT /posts/:postId/view` — published-post member view/watch state; optional `playbackPositionMs`.
 
 The server publication worker persists exactly one notification-outbox event per publication, but actual push delivery remains #9.
+
+## Planned, not implemented
+
+The [household finish plan](MVP_FINISH_PLAN.md) requires invite lifecycle/registration (#21), push registration/preferences/delivery (#9), connection health/credential replacement, per-send retry reconciliation, and client-facing unread/resume summaries. No route signatures are promised here until implementation. Reschedule/delete/view **writes** listed above already exist; they must not be rebuilt as if missing.
 
 ## Provider behavior
 

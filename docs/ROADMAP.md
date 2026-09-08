@@ -10,6 +10,8 @@ GitHub issues are the executable backlog. Code existing is not the same as runti
 
 Generic Docker/self-host polish in #10 follows that proof rather than preceding it.
 
+The [household MVP audit/finish plan](MVP_FINISH_PLAN.md) adds the user-facing release gate after #19. Basic upload feedback/retry, unread/resume, conversation updates, recovery, invites and push are required before inviting the full group. Generic distribution and unneeded platform parity may follow the household release; broader V1 obligations are not marked complete.
+
 ## Implemented in repository
 
 - TypeScript/npm workspace; Fastify API; SQLite migrations/Drizzle schema; Expo universal client.
@@ -25,6 +27,10 @@ Generic Docker/self-host polish in #10 follows that proof rather than preceding 
 - Android client paths for Immich setup, existing picker, phone gallery, camera video recording, image/video rendering, seeking/watch updates, captions, and simple scheduling.
 - stable Android package identity and EAS preview APK profile.
 - Archimedes systemd/nginx/env/SQLite backup/restore templates.
+
+## Code-present is not UX-complete
+
+At audited SHA `a83e4919ce97da6cc7ba1f6ae7ff30e848027d7e`, PostView writes do not yet round-trip into client unread/resume; reschedule/delete APIs have no UI; picker selection immediately sends; phone/camera captions are omitted; and transient startup failures clear the session. Conversation summaries/automatic refresh, push delivery and invite onboarding remain unfinished. See the [ranked findings and acceptance checks](MVP_FINISH_PLAN.md#findings-ranked-by-user-impact). These are source findings, not physical-device test results.
 
 ## Runtime gates
 
@@ -95,8 +101,17 @@ Package/document generic deployment only after #19 proves the real behavior. Reu
 
 Repository CI must be green for the tested SHA, but CI does not substitute for #11–#20 runtime evidence. Every real-server/device failure reports the first failed transition and one of PASS / FAIL / BLOCKED / NOT_DUE / ATTEMPTED_UNVERIFIED / INCOMPLETE_EVIDENCE.
 
-## After V1
+## Household finish order after the first media loop
 
-Prioritize from observed use: upload progress/retry, robust background/resumable upload, unread/sequential playback polish, group UX, richer Immich search, reactions/replies, captions/transcription, voice-only posts, offline support, migration/import tooling.
+1. #8: conversation-first inbox/timeline, correct chronology, unread/resume/Next and request isolation.
+2. #4–#8: shared preview/Send, local captions, old-media access, upload feedback/retry, media recovery and schedule/delete controls.
+3. #21/#9: invites, guided setup/recovery, push and notification navigation.
+4. #14/#16–#20: real household acceptance, privacy checks, backup restore and APK upgrade.
+
+Provider-independent client correctness fixes can proceed while #11–#13 runtime evidence is collected. Use existing issues rather than creating a parallel backlog.
+
+## After the household MVP
+
+Finish broader V1 platform/generic deployment obligations as needed. Prioritize further features from observed use: robust background/resumable upload, elaborate autoplay, group UX, semantic Immich search, reactions/replies, transcription, voice-only posts, offline support, migration/import tooling. Basic upload progress/retry and unread/resume are **not** deferred.
 
 Never add separate permanent media storage as a shortcut.

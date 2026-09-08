@@ -1,6 +1,6 @@
 # Next moves
 
-This is a short execution view. The detailed acceptance contract is [`M1_TWO_PHONE_VERTICAL_SLICE.md`](M1_TWO_PHONE_VERTICAL_SLICE.md).
+This is a short execution view. The first runtime acceptance contract is [`M1_TWO_PHONE_VERTICAL_SLICE.md`](M1_TWO_PHONE_VERTICAL_SLICE.md); the complete household UX finish plan is [`MVP_FINISH_PLAN.md`](MVP_FINISH_PLAN.md).
 
 ## Now — unblock the real media loop
 
@@ -19,10 +19,12 @@ Run in parallel:
    - public HTTPS API origin;
    - local `127.0.0.1:2283` Immich connection;
    - streaming-safe nginx.
-3. **Cloud implementation**
-   - keep the official-v3 provider aligned to current OpenAPI and local evidence;
-   - keep Android media UX/build green;
-   - fix CI before declaring a SHA ready for physical testing.
+3. **Provider-independent client correctness**
+   - preserve sessions on network failures and handle refresh errors;
+   - isolate requests/drafts when switching conversations;
+   - add preview + explicit Send for all media sources; retain local captions and tolerate invalid optional capture metadata;
+   - round-trip existing watch state and fix publication chronology;
+   - fix provider mismatches only against #11–#13 evidence; keep CI green before physical testing.
 
 ## Immediately after #11-#13 pass
 
@@ -39,12 +41,13 @@ Run in parallel:
 3. Execute #14 plus the two-phone milestone.
 4. Publish/copy the verified APK into the existing phone APK distribution flow only after its SHA/server compatibility is recorded.
 
-## Then
+## Then — finish the household product
 
-1. Finish push notifications/deep linking (#9).
-2. Replace manual household-secret registration for invitees with short-lived one-time invite codes/links.
-3. Polish unread continuous playback and upload progress/retry.
-4. Only then finish generalized Docker/self-host packaging (#10) around the behavior already proven on Archimedes.
+1. Make conversations the home screen: visible activity/unread, publication ordering, resume/Next, bounded timeline and foreground refresh (#8).
+2. Finish practical old-media selection, upload feedback/retry, missing/processing-media recovery and in-app schedule/delete controls (#4–#8).
+3. Finish push/deep links (#9), single-use invites (#21), guided Immich setup/reconnect and basic account recovery.
+4. Execute the [household acceptance script](MVP_FINISH_PLAN.md#household-acceptance-script), including offline recovery, one backup restore and APK upgrade; roll out first to 2–3 testers, then the household.
+5. Keep generic Docker/self-host packaging (#10) and unneeded platform parity outside this intermediate release. Track broader V1 work honestly; do not call it completed.
 
 ## Stop conditions
 
