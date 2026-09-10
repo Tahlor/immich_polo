@@ -75,7 +75,7 @@ V1 lets a user:
 Requires Node.js 22.14+ (the repository/CI baseline).
 
 ```bash
-npm install
+npm ci
 npm run check
 cp .env.example .env
 ```

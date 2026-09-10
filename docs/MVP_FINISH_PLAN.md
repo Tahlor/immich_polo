@@ -107,8 +107,9 @@ there are only twelve users:
   treating that as private (#5/#16/#18).
 - Maintain local SQLite and a recoverable backup of metadata **and the credential
   encryption key**, protected separately. Verify restore and APK update once.
-  Basic reproducibility (including a checked-in dependency lockfile) belongs in
-  #15/#20; no packaging redesign is necessary.
+  A checked-in dependency lockfile now makes resolution reproducible; #15/#20
+  still own fresh-clone install, migration, and upgrade evidence. No packaging
+  redesign is necessary.
 
 ## Execution plan
 

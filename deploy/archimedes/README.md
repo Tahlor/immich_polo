@@ -16,7 +16,7 @@ Before starting the service:
 
 ```bash
 cd /home/ubuntu/Projects/immich_polo
-npm install
+npm ci
 npm run check
 npm run build
 sudo install -d -o ubuntu -g ubuntu /var/lib/immich-polo
