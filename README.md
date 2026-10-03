@@ -10,9 +10,13 @@ The near-term product gate is **[#19: two standalone Android phones exchange rea
 
 Android is the primary V1 client. Web/PWA is secondary. Polo uses its own accounts and bearer sessions; **Universal SSO is not required for the native app/API**.
 
-For the UX-first finish plan for roughly twelve users, see [`docs/MVP_FINISH_PLAN.md`](docs/MVP_FINISH_PLAN.md). It separates the household Android release from broader V1 distribution/platform work; #19 remains the first real-media gate.
+For the current evidence-backed state, see [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md). For the UX-first finish plan for roughly twelve users, see [`docs/MVP_FINISH_PLAN.md`](docs/MVP_FINISH_PLAN.md).
 
 ## Current status
+
+**Latest verified source baseline before this documentation update:** `90fee145de14186c7f80dfef047f4024156df7df`; GitHub Actions run `34442702058` passed with reproducible `npm ci` installation, lint, typecheck, build, and repository tests.
+
+**Deployment status: NOT VERIFIED.** Archimedes deployment issue #18 remains open with no deployment report. Deployment templates exist in the repository, but there is no recorded deployed SHA, running systemd unit/port, `/health`/`/ready` evidence, public hostname, restart/persistence proof, or standalone APK/two-phone acceptance result. Do not describe the app as deployed until #18 records that evidence.
 
 Current `master` contains:
 
@@ -30,9 +34,10 @@ Current `master` contains:
 - Expo Android/iOS/web client with native SecureStore session restoration;
 - Android Immich browser, phone picker, camera recording, authenticated image/video playback, seek/watch updates, captions, and scheduling controls;
 - stable Android package identity plus an EAS preview profile that targets a standalone APK;
-- Archimedes systemd/nginx/environment/SQLite-backup templates under `deploy/archimedes/`.
+- Archimedes systemd/nginx/environment/SQLite-backup templates under `deploy/archimedes/`;
+- checked-in dependency lockfile and reproducible CI installation via `npm ci`.
 
-Code existence is not runtime proof. Real Immich behavior is still gated by [#11](https://github.com/Tahlor/immich_polo/issues/11), [#12](https://github.com/Tahlor/immich_polo/issues/12), and [#13](https://github.com/Tahlor/immich_polo/issues/13); deployment is [#18](https://github.com/Tahlor/immich_polo/issues/18); standalone APK evidence is [#20](https://github.com/Tahlor/immich_polo/issues/20).
+Code existence is not runtime proof. Real Immich behavior is still gated by [#11](https://github.com/Tahlor/immich_polo/issues/11), [#12](https://github.com/Tahlor/immich_polo/issues/12), and [#13](https://github.com/Tahlor/immich_polo/issues/13); deployment is [#18](https://github.com/Tahlor/immich_polo/issues/18); standalone APK evidence is [#20](https://github.com/Tahlor/immich_polo/issues/20); the full two-phone gate is #19.
 
 ## Primary deployment
 
@@ -96,6 +101,7 @@ A physical phone needs a reachable HTTPS API origin rather than `localhost`. Nev
 
 ## Documentation map
 
+- [`docs/CURRENT_STATUS.md`](docs/CURRENT_STATUS.md) — **dated verified implementation/deployment/device status and outstanding gates**.
 - [`docs/README.md`](docs/README.md) — documentation index/source-of-truth rules.
 - [`docs/M1_TWO_PHONE_VERTICAL_SLICE.md`](docs/M1_TWO_PHONE_VERTICAL_SLICE.md) — controlling near-term acceptance scenario.
 - [`docs/NEXT_MOVES.md`](docs/NEXT_MOVES.md) — executable work order.
