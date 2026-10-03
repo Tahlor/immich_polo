@@ -6,13 +6,16 @@
 
 Do not prioritize generalized deployment polish ahead of that milestone unless it directly unblocks the two-phone scenario.
 
+**[`CURRENT_STATUS.md`](CURRENT_STATUS.md)** is the dated answer to what is implemented, CI-verified, deployed, device-tested, and still outstanding. As of 2026-10-03, source/CI is verified but Archimedes deployment and Android/two-phone runtime acceptance are **not demonstrated**.
+
 [`MVP_FINISH_PLAN.md`](MVP_FINISH_PLAN.md) records the 2026-09-08 source audit and UX-first household release plan: deliberate sending, reliable conversations/unread/resume, recovery, invitations and notifications. It is a plan, not evidence of shipped behavior or runtime acceptance.
 
 ## Source-of-truth map
 
 | Document | Purpose |
 | --- | --- |
-| [`../README.md`](../README.md) | Product summary, current implementation status, quick start |
+| [`../README.md`](../README.md) | Product summary and quick start |
+| [`CURRENT_STATUS.md`](CURRENT_STATUS.md) | **Dated verified status: source, CI, deployment, device evidence, outstanding gates** |
 | [`M1_TWO_PHONE_VERTICAL_SLICE.md`](M1_TWO_PHONE_VERTICAL_SLICE.md) | Current execution order and two-phone acceptance gate |
 | [`MVP_FINISH_PLAN.md`](MVP_FINISH_PLAN.md) | Audited gaps, household MVP boundary, ordered delivery slices and user acceptance script |
 | [`PRODUCT_PLAN.md`](PRODUCT_PLAN.md) | User flows, requirements, V1 acceptance scenario, scope |
@@ -29,7 +32,7 @@ Do not prioritize generalized deployment polish ahead of that milestone unless i
 
 ## Source-of-truth rule
 
-Use the product plan for **what V1 must do**, the two-phone milestone for **what to execute next**, architecture/API/client/scheduling docs for **how the current implementation behaves**, the roadmap for **dependency/status tracking**, and GitHub issues for executable work/evidence. If prose and current code disagree, treat that as a documentation defect and update the relevant behavior document in the same change.
+Use the current-status snapshot for **what has actually been verified**, the product plan for **what V1 must do**, the two-phone milestone for **what to execute next**, architecture/API/client/scheduling docs for **how the current implementation behaves**, the roadmap for **dependency/status tracking**, and GitHub issues for executable work/evidence. If prose and current code disagree, treat that as a documentation defect and update the relevant behavior document in the same change.
 
 Evidence that requires a real Immich server, process restart, physical device, or real network path belongs in the dedicated tickets linked from [`LOCAL_TESTS.md`](LOCAL_TESTS.md), not in an unverified claim in documentation.
 
