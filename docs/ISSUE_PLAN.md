@@ -2,6 +2,8 @@
 
 The two-phone milestone is decomposed so host/runtime proof and cloud implementation do not duplicate each other.
 
+See [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for the dated verified state. As of 2026-10-03, source/CI is verified but deployment/device/runtime acceptance is not demonstrated.
+
 ## Controlling milestone
 
 - **#19 — two standalone Android phones exchange real Immich media through Archimedes.** This is the near-term product acceptance gate.
@@ -17,6 +19,14 @@ The two-phone milestone is decomposed so host/runtime proof and cloud implementa
 - #17 — scheduler restart/race evidence.
 - #18 — install and validate Polo on **Archimedes**; Pi3 remains Immich storage only.
 - #20 — build/distribute/verify the standalone Android APK used by #19.
+
+## Focused source/MVP blockers
+
+These child issues make the biggest still-present defects independently implementable without replacing the broader parent issues:
+
+- #22 — deliberate compose/preview, caption propagation, send-state/retry/idempotency. Parents: #4/#5/#8.
+- #23 — conversation isolation, publication chronology, current-user PostView read-back, unread/resume/inbox behavior. Parents: #7/#8.
+- #24 — post mutation membership/existence hardening, request/log privacy, simple auth throttling and production Immich-origin restriction. Parents: #3/#7/#16/#18.
 
 ## Follow-on product work
 
