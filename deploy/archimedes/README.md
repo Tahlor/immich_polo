@@ -142,4 +142,10 @@ The intended Immich connection value for this deployment is `http://127.0.0.1:22
 
 Keep `IMMICH_PROVIDER=unverified` until #11-#13 pass on the installed Immich v3 server. Once they pass, change it to `official-v3`, restart Polo, and execute the full provider-backed checks.
 
+On 2026-10-04 the existing Immich guard independently stopped its stack after
+mount/sentinel failures, and local Vitest worker-start timeouts occurred under
+heavy host load. These are recorded in #18 alongside passing runs; do not
+bypass the guard or treat CI as local runtime proof. Revalidate Immich mount,
+sentinel, guarded service and local ping before continuing the media gates.
+
 See [`../../docs/DEPLOYMENT_ARCHIMEDES.md`](../../docs/DEPLOYMENT_ARCHIMEDES.md) for topology and acceptance requirements.

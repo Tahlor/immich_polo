@@ -21,6 +21,15 @@ origin allowlist, daily backup units and restore ownership preservation.
 The final exact deployed/tested SHA and subsequent CI result are recorded
 in #18 rather than inferred from this snapshot.
 
+Local gate qualification: a full retry on `7b398c76dbda8a59fc9059b1179260144a99992a`
+also passed all 28 tests/builds. Two other repeats (on that SHA and deployment
+fix SHA `f09b976019d3f6a017f78526b7ceeaebc8e8e19f`) failed starting the Vitest
+thread worker for `threads/routes.test.ts`; the isolated file retry passed.
+The failed runs did not reach the build phase. Host load and swap pressure
+were high; their causal role is not proved. Actions run 37181297202 passed on
+the exact `f09b976` SHA. No application/dependency files changed from the
+initial passing baseline. Do not describe the failed local repeats as PASS.
+
 Likewise, there is no posted standalone APK/two-phone acceptance result. #20 and #19 remain open.
 
 ## What is implemented in `master`
@@ -90,6 +99,14 @@ Immich reports `3.1.0` locally. Production permits only
 test API key is available to the agent, so actual provider requests, upload,
 Range and outage recovery remain blocked by #11–#13. The API-only deployment
 does not serve a web client or demonstrate #19. #18 remains the owning ticket.
+
+Host reliability also remains a prerequisite: during the run, the existing
+Immich storage guard stopped Immich after its mount/sentinel check failed.
+The mount passed checks afterward and guarded startup recovered, but another
+guard stop occurred. No guard was bypassed or modified. Polo health/readiness
+continued to return `200` while Immich was stopped; real provider recovery
+cannot be inferred with the fail-closed provider. Check #18 for the latest
+upstream state before attempting #11–#13.
 A deployment report must continue to include:
 
 - exact deployed Polo SHA;
