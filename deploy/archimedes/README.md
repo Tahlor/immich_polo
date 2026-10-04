@@ -94,7 +94,8 @@ Requires the installed `sqlite3` CLI. Daily backups run at approximately
 03:10 UTC (up to five minutes randomized delay), with missed runs caught up
 after boot. Backups use SQLite's online backup operation rather than copying
 a live WAL database. Root-owned snapshots are mode `0640` inside
-`/var/backups/immich-polo` (mode `0700`). No automatic deletion is configured;
+`/var/backups/immich-polo` (root:root mode `0750`, set by the backup script).
+The environment backup is mode `0600`. No automatic deletion is configured;
 the operator must monitor disk space and prune old snapshots deliberately.
 
 Keep a matching root-only environment/key backup after setup or any deliberate
