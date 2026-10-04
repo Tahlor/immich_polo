@@ -70,6 +70,14 @@ uses Polo bearer auth with no SSO gate; the nginx upstream stays loopback.
 The route has 8 GiB body allowance, request/response buffering disabled,
 explicit Range/If-Range forwarding and one-hour proxy read/send timeouts.
 
+Upload URLs additionally perform a body-free nginx subrequest to Polo's
+`GET /auth/me`, forwarding the bearer header. This is Polo session validation,
+not Universal SSO. An invalid session is rejected before upload bytes are
+sent upstream. It fixes an observed race where an early API `401` caused
+nginx's ongoing body write to fail with a broken pipe and expose `502`.
+The internal subrequest is not publicly accessible. The API still checks
+thread membership, connection ownership and exact media authorization.
+
 `/debug/version` serves `/var/www/immich-polo/version.json`, created at each
 deployment with public fields `app=immich_polo`, `build_id`, exact `git_sha`,
 and `server_utc` (deployment timestamp, not a live clock). Create the directory

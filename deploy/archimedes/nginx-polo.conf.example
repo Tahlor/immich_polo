@@ -31,27 +31,44 @@ server {
         add_header Cache-Control "no-store" always;
     }
 
-    # Polo deliberately uses its own bearer authentication. Do not add the
-    # Universal SSO auth_request gate used by browser-only webapps.
+    # Polo uses bearer authentication, without a Universal SSO cookie gate.
+    proxy_http_version 1.1;
+
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header Authorization $http_authorization;
+
+    # Preserve video seeking semantics.
+    proxy_set_header Range $http_range;
+    proxy_set_header If-Range $http_if_range;
+
+    # Streaming settings are shared by ordinary and upload locations.
+    proxy_request_buffering off;
+    proxy_buffering off;
+    client_max_body_size 8g;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+
+    # Reject invalid bearer sessions before sending a streamed body upstream.
+    # Otherwise an early API 401 can race nginx's body write and become a 502.
+    # The API still owns all thread/connection/media authorization checks.
+    location ~ ^/threads/[^/]+/posts/upload/[^/]+$ {
+        auth_request /_polo_session;
+        proxy_pass http://127.0.0.1:13060;
+    }
+
+    location = /_polo_session {
+        internal;
+        proxy_pass http://127.0.0.1:13060/auth/me;
+        proxy_method GET;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        proxy_set_header Host $host;
+        proxy_set_header Authorization $http_authorization;
+    }
+
     location / {
         proxy_pass http://127.0.0.1:13060;
-        proxy_http_version 1.1;
-
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header Authorization $http_authorization;
-
-        # Preserve video seeking semantics.
-        proxy_set_header Range $http_range;
-        proxy_set_header If-Range $http_if_range;
-
-        # Polo streams phone uploads into Immich rather than buffering a second
-        # full copy. Keep nginx from defeating that behavior.
-        proxy_request_buffering off;
-        proxy_buffering off;
-        client_max_body_size 8g;
-        proxy_read_timeout 3600s;
-        proxy_send_timeout 3600s;
     }
 }
