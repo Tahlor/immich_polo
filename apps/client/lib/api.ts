@@ -1,3 +1,5 @@
+import type { SendStatus } from "./compose";
+
 export interface PublicUser {
   id: string;
   displayName: string;
@@ -177,7 +179,7 @@ export async function listImmichAssets(
 export async function createPostFromImmich(
   token: string,
   threadId: string,
-  input: { connectionId: string; assetId: string; caption?: string; visibleAt?: string },
+  input: { connectionId: string; assetId: string; caption?: string; visibleAt?: string; sendId?: string },
 ): Promise<PostSummary> {
   return (await requestJson<{ post: PostSummary }>(
     `/threads/${encodeURIComponent(threadId)}/posts/from-immich`,
@@ -191,24 +193,65 @@ export async function uploadLocalPost(
   threadId: string,
   connectionId: string,
   file: LocalUploadFile,
-  options: { caption?: string; capturedAt?: string; visibleAt?: string } = {},
+  options: { caption?: string; capturedAt?: string; visibleAt?: string; sendId?: string; fileId?: string; skipUpload?: boolean; onPreparing?: () => void; onProgress?: (fraction: number) => void } = {},
 ): Promise<{ post: PostSummary; duplicate: boolean }> {
   const query = new URLSearchParams();
+  if (options.sendId) query.set("sendId", options.sendId);
+  if (options.fileId) query.set("fileId", options.fileId);
   if (options.caption?.trim()) query.set("caption", options.caption.trim());
   if (options.capturedAt) query.set("capturedAt", options.capturedAt);
   if (options.visibleAt) query.set("visibleAt", options.visibleAt);
   const form = new FormData();
-  if (file.webFile) {
+  if (!options.skipUpload && file.webFile) {
     form.append("file", file.webFile, file.filename);
-  } else {
+  } else if (!options.skipUpload) {
     form.append("file", { uri: file.uri, name: file.filename, type: file.contentType } as unknown as Blob);
   }
-  const result = await requestJson<{ post: PostSummary; upload: { duplicate: boolean } }>(
-    `/threads/${encodeURIComponent(threadId)}/posts/upload/${encodeURIComponent(connectionId)}${query.size ? `?${query.toString()}` : ""}`,
-    { method: "POST", body: form },
-    token,
-  );
+  const path = `/threads/${encodeURIComponent(threadId)}/posts/upload/${encodeURIComponent(connectionId)}${query.size ? `?${query.toString()}` : ""}`;
+  const result = !options.skipUpload && (options.onPreparing || options.onProgress)
+    ? await uploadWithProgress(path, form, token, options)
+    : await requestJson<{ post: PostSummary; upload: { duplicate: boolean } }>(path, { method: "POST", ...(options.skipUpload ? {} : { body: form }) }, token);
   return { post: result.post, duplicate: result.upload.duplicate };
+}
+
+function uploadWithProgress(path: string, form: FormData, token: string, options: { onPreparing?: () => void; onProgress?: (fraction: number) => void }) {
+  return new Promise<{ post: PostSummary; upload: { duplicate: boolean } }>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${POLO_API_URL}${path}`);
+    xhr.timeout = 3_600_000;
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.setRequestHeader("Accept", "application/json");
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && event.total > 0) options.onProgress?.(Math.min(1, event.loaded / event.total));
+    };
+    xhr.upload.onload = () => options.onPreparing?.();
+    xhr.onerror = xhr.ontimeout = xhr.onabort = () => reject(new Error("Connection interrupted. Your draft is kept; retry to check whether it was sent."));
+    xhr.onload = () => {
+      let body;
+      try { body = JSON.parse(xhr.responseText); } catch { reject(new Error("Could not read the server result. Retry to check this send.")); return; }
+      if (xhr.status < 200 || xhr.status >= 300) reject(new PoloApiError(xhr.status, body.error ?? `http_${xhr.status}`));
+      else resolve(body);
+    };
+    xhr.send(form);
+  });
+}
+
+export async function getSendStatus(token: string, threadId: string, sendId: string): Promise<SendStatus> {
+  try {
+    return await requestJson(`/threads/${encodeURIComponent(threadId)}/sends/${encodeURIComponent(sendId)}`, {}, token);
+  } catch (error) {
+    if (error instanceof PoloApiError && error.status === 404 && error.code === "send_not_found") return { state: "missing" };
+    throw error;
+  }
+}
+
+export async function cancelSend(token: string, threadId: string, sendId: string): Promise<SendStatus> {
+  try {
+    return await requestJson(`/threads/${encodeURIComponent(threadId)}/sends/${encodeURIComponent(sendId)}`, { method: "DELETE" }, token);
+  } catch (error) {
+    if (error instanceof PoloApiError && error.status === 410 && error.code === "send_post_deleted") return { state: "cancelled" };
+    throw error;
+  }
 }
 
 export async function updatePostView(

@@ -22,6 +22,7 @@ The [household MVP audit/finish plan](MVP_FINISH_PLAN.md) adds the user-facing r
 - existing Immich picker metadata + authenticated thumbnails.
 - existing-asset posting without copying canonical media.
 - streamed multipart local/device upload into Immich, canonical asset re-fetch/reference, duplicate-aware result.
+- #22 shared review/Send/Schedule draft, local captions/defensive EXIF, per-send states and SQLite-backed retry/reconciliation/cancellation. Source/client/API tests are separate from real-media/physical-device acceptance.
 - post-scoped image/video proxy, recipient authorization, HTTP Range forwarding for video.
 - durable scheduler, idempotent notification outbox, author reschedule/delete, watch/resume state.
 - Android client paths for Immich setup, existing picker, phone gallery, camera video recording, image/video rendering, seeking/watch updates, captions, and simple scheduling.
@@ -29,6 +30,10 @@ The [household MVP audit/finish plan](MVP_FINISH_PLAN.md) adds the user-facing r
 - Archimedes systemd/nginx/env/SQLite backup/restore templates.
 
 ## Code-present is not UX-complete
+
+#22 addresses explicit send review, local captions, safe optional EXIF and logical
+send retry in source. The audit paragraph below is historical; current evidence
+belongs to #22. Broader conversation/session/device gates remain outstanding.
 
 At audited SHA `a83e4919ce97da6cc7ba1f6ae7ff30e848027d7e`, PostView writes do not yet round-trip into client unread/resume; reschedule/delete APIs have no UI; picker selection immediately sends; phone/camera captions are omitted; and transient startup failures clear the session. Conversation summaries/automatic refresh, push delivery and invite onboarding remain unfinished. See the [ranked findings and acceptance checks](MVP_FINISH_PLAN.md#findings-ranked-by-user-impact). These are source findings, not physical-device test results.
 

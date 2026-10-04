@@ -18,7 +18,7 @@ The Expo application currently implements:
 - visible thread posts plus the author's scheduled posts;
 - per-user Immich connection setup using a permission-scoped API key;
 - authenticated existing-Immich asset browsing with thumbnails;
-- posting an existing asset immediately or at a future time;
+- shared media review with explicit Send/Schedule for existing, phone and camera media;
 - device photo/video selection;
 - camera video capture;
 - multipart upload through Polo into the connected Immich account;
@@ -32,12 +32,10 @@ These application paths exist in code, but the production server remains fail-cl
 
 The [MVP finish plan](MVP_FINISH_PLAN.md) distinguishes code-present paths from a complete user experience. Currently:
 
-- choosing a library/phone/camera item immediately posts/uploads it; there is no shared preview + explicit Send step;
-- local phone/camera uploads omit the entered caption, although the API supports it;
 - playback position is written but not read/restored by the player; no unread summaries/Next flow is wired;
 - images report seen on mount rather than successful visible rendering;
 - transient startup/home-load failure clears the stored session; manual refresh errors are not handled;
-- responses and drafts are not isolated when switching conversations;
+- broader conversation request/unread/navigation isolation remains #23; the compose draft and send keep their original destination, and post refresh ignores a response for another active thread;
 - reschedule/delete routes have no client controls, and media loading/error/processing recovery is unfinished;
 - the thread is an unbounded ScrollView with manual refresh and its composer below the history.
 
@@ -61,15 +59,45 @@ The web/PWA media surface is secondary. Browser-native media elements cannot alw
 
 ## Composition
 
-The current composer offers:
+The current composer uses one shared review flow for **Immich**, **Phone**, and
+**Record**. Selecting/recording media creates a draft without publishing or
+uploading. Existing media previews its authenticated picker thumbnail; local
+images/videos preview from the selected URI (local videos have playback controls).
+The review shows the destination and source, caption, delay in minutes, and a
+local date/time/timezone preview before explicit **Send Polo** / **Schedule Polo**.
+Source buttons change media; Remove keeps caption/schedule; Cancel drops the
+unsubmitted draft. Phone and camera captions are forwarded. Invalid optional
+capture dates are ignored; ISO dates and the standard EXIF date format are parsed.
 
-- **Immich** — select an existing canonical asset;
-- **Phone** — select local device media and upload it into Immich;
-- **Record** — capture a new video and upload it into Immich;
-- optional caption;
-- immediate send or a simple delay-in-minutes schedule control.
+Confirmation freezes a UUID send identity, source/file identity, destination,
+caption, and absolute publication instant. Double taps cannot start a second
+request. Checking / Uploading / Preparing / Sent / Failed states are separate
+from the ordinary busy flag. Upload percentage is shown when the native/browser
+transport supplies computable byte progress; it is never simulated. Preparing
+starts after the upload body finishes transfer, while awaiting the API result.
 
-The delay control is sufficient for the first vertical slice. A polished date/time picker can replace it later without changing the server's absolute-instant scheduling contract.
+A failed/ambiguous request keeps its draft. **Check & retry** first asks the server
+for that logical send; an existing result is acknowledged without resending.
+A checkpointed upload resumes metadata preparation without uploading the file
+again. Retry otherwise uses the same ID and frozen input. After an attempt,
+editing is locked until reconciliation. **Check & discard draft** atomically
+cancels an unsent/expired send, refuses a live send, or acknowledges a completed
+post without deleting it. Cancelling a draft never deletes Immich media.
+Success clears the draft only after a server result is known; a subsequent thread
+refresh failure reports that sending succeeded and offers ordinary refresh.
+
+The draft retains its original destination while navigating between conversations;
+a different conversation offers **Return to draft** instead of silently moving
+it. Drafts/retry identities are kept in memory for this foreground MVP. Keep Polo
+open while uploading/recovering; force-killing/reinstalling the client is not yet
+a durable draft-recovery feature. No permanent duplicate original is stored by
+Polo. Device URI survival across app kill and real Immich upload/deduplication
+still require #13/#14. Wider chronology/unread/player/session recovery stays #23.
+
+The delay control remains a first-slice schedule UI. A calendar/date-time picker
+can follow without changing the server's absolute-instant scheduling contract.
+Client state/wire-format regression tests run in `npm run check`; those tests and
+web export do not substitute for physical APK acceptance (#14/#20/#19).
 
 ## Runtime configuration
 

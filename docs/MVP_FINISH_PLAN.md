@@ -239,6 +239,14 @@ admin recovery. CI is green for the release SHA and runtime evidence names that 
 12. Restore Polo metadata with the required encryption key from protected backup;
     confirm the documented deployment can recover without copying original media.
 
+## Implementation follow-up
+
+#22 now owns the shared explicit review/send flow, caption/date handling, and
+SQLite-backed logical-send retry/reconciliation. See `CLIENT.md`,
+`API_CONTRACT.md`, and issue #22 for current behavior and exact evidence. This
+does not replace the historical audit above or prove physical-device/real-media
+acceptance. Conversation chronology/unread/session work remains separate.
+
 ## First implementation commits
 
 1. **Client recovery and isolation:** preserve valid sessions on transient failure,

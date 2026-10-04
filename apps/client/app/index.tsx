@@ -1,11 +1,16 @@
 import { StatusBar } from "expo-status-bar";
+import { randomUUID } from "expo-crypto";
 import * as ImagePicker from "expo-image-picker";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { DraftPreview } from "../components/DraftPreview";
+import { ComposeController, safeCapturedAt, scheduledInstant, type ComposeState, type DraftMedia, type SendTransport } from "../lib/compose";
 import { AuthorizedImage } from "../components/AuthorizedImage";
 import { AuthorizedVideo } from "../components/AuthorizedVideo";
 import {
   bearerHeaders,
+  cancelSend,
+  getSendStatus,
   createImmichConnection,
   createPostFromImmich,
   createThread,
@@ -61,14 +66,6 @@ function toLocalUploadFile(asset: ImagePicker.ImagePickerAsset): LocalUploadFile
   };
 }
 
-function scheduleFromMinutes(value: string): string | undefined {
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  const minutes = Number(trimmed);
-  if (!Number.isFinite(minutes) || minutes <= 0) throw new Error("Schedule minutes must be greater than zero");
-  return new Date(Date.now() + minutes * 60_000).toISOString();
-}
-
 export default function HomeScreen() {
   const [booting, setBooting] = useState(true);
   const [session, setSession] = useState<AppSession | null>(null);
@@ -90,8 +87,16 @@ export default function HomeScreen() {
   const [showImmichPicker, setShowImmichPicker] = useState(false);
   const [immichAssets, setImmichAssets] = useState<ImmichAsset[]>([]);
   const [immichNextCursor, setImmichNextCursor] = useState<string | null>(null);
-  const [caption, setCaption] = useState("");
-  const [scheduleMinutes, setScheduleMinutes] = useState("");
+  const [compose, setCompose] = useState<ComposeState>({ draft: null, attempt: null, phase: "review", error: null });
+  const [composer] = useState(() => new ComposeController(randomUUID, setCompose));
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const selectedThreadId = useRef<string | null>(null);
+  const sessionToken = useRef<string | null>(null);
+  sessionToken.current = session?.token ?? null;
+  const sending = composer.sending;
+  const reviewingHere = compose.draft?.threadId === selectedThread?.id;
+  const canChangeDraft = !sending && !compose.attempt;
+
 
   const primaryConnection = connections[0] ?? null;
   const otherUsers = useMemo(
@@ -111,7 +116,8 @@ export default function HomeScreen() {
   }, []);
 
   const refreshPosts = useCallback(async (current: AppSession, threadId: string) => {
-    setPosts(await listPosts(current.token, threadId));
+    const next = await listPosts(current.token, threadId);
+    if (selectedThreadId.current === threadId && sessionToken.current === current.token) setPosts(next);
   }, []);
 
   useEffect(() => {
@@ -159,6 +165,8 @@ export default function HomeScreen() {
 
   const signOut = async () => {
     const current = session;
+    composer.reset();
+    selectedThreadId.current = null;
     setSession(null);
     setSelectedThread(null);
     setPosts([]);
@@ -174,6 +182,8 @@ export default function HomeScreen() {
 
   const openThread = async (thread: ThreadSummary) => {
     if (!session) return;
+    selectedThreadId.current = thread.id;
+    setPosts([]);
     setSelectedThread(thread);
     setShowImmichPicker(false);
     setBusy(true);
@@ -220,10 +230,12 @@ export default function HomeScreen() {
 
   const loadImmichPicker = async (cursor?: string) => {
     if (!session || !primaryConnection) return;
+    const destinationId = selectedThreadId.current;
     setBusy(true);
     setError(null);
     try {
       const page = await listImmichAssets(session.token, primaryConnection.id, { limit: 40, ...(cursor ? { cursor } : {}) });
+      if (selectedThreadId.current !== destinationId) return;
       setImmichAssets((current) => cursor ? [...current, ...page.assets] : page.assets);
       setImmichNextCursor(page.nextCursor);
       setShowImmichPicker(true);
@@ -234,80 +246,83 @@ export default function HomeScreen() {
     }
   };
 
-  const postExisting = async (asset: ImmichAsset) => {
-    if (!session || !selectedThread || !primaryConnection) return;
+  const draftContext = () => {
+    if (!session || !selectedThread || !primaryConnection) return null;
+    if (compose.draft && !reviewingHere) { setError("Return to your saved draft before choosing another item."); return null; }
+    return {
+      threadId: selectedThread.id,
+      destination: selectedThread.title ?? (selectedThread.members.filter((m) => m.id !== session.user.id).map((m) => m.displayName).join(", ") || "Just me"),
+      connectionId: primaryConnection.id,
+      caption: compose.draft?.caption ?? "",
+      scheduleMinutes: compose.draft?.scheduleMinutes ?? "",
+    };
+  };
+
+  const selectExisting = (asset: ImmichAsset) => {
+    const context = draftContext();
+    if (!context) return;
+    composer.select({ ...context, media: { source: "immich", asset } });
+    setShowImmichPicker(false);
+  };
+
+  const selectLocal = async (source: "phone" | "camera") => {
+    const context = draftContext();
+    const token = session?.token;
+    if (!context || !canChangeDraft || busy) return;
     setBusy(true);
     setError(null);
     try {
-      const visibleAt = scheduleFromMinutes(scheduleMinutes);
-      await createPostFromImmich(session.token, selectedThread.id, {
-        connectionId: primaryConnection.id,
-        assetId: asset.id,
-        ...(caption.trim() ? { caption: caption.trim() } : {}),
-        ...(visibleAt ? { visibleAt } : {}),
-      });
-      setCaption("");
-      setScheduleMinutes("");
-      setShowImmichPicker(false);
-      await refreshPosts(session, selectedThread.id);
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(false);
+      if (source === "camera") {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) throw new Error("Camera permission is required to record a Polo");
+      }
+      const result = source === "camera"
+        ? await ImagePicker.launchCameraAsync({ mediaTypes: ["videos"], quality: 1, videoMaxDuration: 20 * 60 })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images", "videos"], quality: 1, exif: true });
+      const asset = result.assets?.[0];
+      if (!result.canceled && asset && sessionToken.current === token) {
+        const media: DraftMedia = {
+          source, file: toLocalUploadFile(asset), fileId: randomUUID(), mediaType: asset.type === "video" ? "video" : "image",
+          capturedAt: safeCapturedAt(asset.exif?.DateTimeOriginal),
+        };
+        composer.select({ ...context, media });
+        setShowImmichPicker(false);
+      }
+    } catch (err) { setError(errorMessage(err)); }
+    finally { setBusy(false); }
+  };
+
+  const sendTransport = (current: AppSession): SendTransport => ({
+    status: (attempt) => getSendStatus(current.token, attempt.threadId, attempt.sendId),
+    cancel: (attempt) => cancelSend(current.token, attempt.threadId, attempt.sendId),
+    send: async (attempt, onPreparing, skipUpload) => {
+      const options = { caption: attempt.caption, visibleAt: attempt.visibleAt, sendId: attempt.sendId };
+      if (attempt.media.source === "immich") {
+        return createPostFromImmich(current.token, attempt.threadId, { ...options, connectionId: attempt.connectionId, assetId: attempt.media.asset.id });
+      }
+      return (await uploadLocalPost(current.token, attempt.threadId, attempt.connectionId, attempt.media.file, {
+        ...options, capturedAt: attempt.media.capturedAt, fileId: attempt.media.fileId, onPreparing, onProgress: setUploadProgress, skipUpload,
+      })).post;
+    },
+  });
+
+  const confirmSend = async (discard = false) => {
+    if (!session) return;
+    const current = session;
+    const destinationId = composer.state.draft?.threadId;
+    setUploadProgress(null);
+    const post = discard ? await composer.discardFailed(sendTransport(current)) : await composer.confirm(sendTransport(current));
+    if (post && destinationId) {
+      try { await refreshPosts(current, destinationId); }
+      catch { setError("Sent successfully. Refresh the conversation to see it."); }
     }
   };
 
-  const uploadPickedAsset = async (asset: ImagePicker.ImagePickerAsset) => {
-    if (!session || !selectedThread || !primaryConnection) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const visibleAt = scheduleFromMinutes(scheduleMinutes);
-      const capturedAt = asset.exif && typeof asset.exif.DateTimeOriginal === "string"
-        ? new Date(asset.exif.DateTimeOriginal).toISOString()
-        : undefined;
-      await uploadLocalPost(
-        session.token,
-        selectedThread.id,
-        primaryConnection.id,
-        toLocalUploadFile(asset),
-        {
-          ...(capturedAt ? { capturedAt } : {}),
-          ...(visibleAt ? { visibleAt } : {}),
-        },
-      );
-      setCaption("");
-      setScheduleMinutes("");
-      await refreshPosts(session, selectedThread.id);
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const chooseDeviceMedia = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images", "videos"],
-      quality: 1,
-      exif: true,
-    });
-    if (!result.canceled && result.assets[0]) await uploadPickedAsset(result.assets[0]);
-  };
-
-  const recordVideo = async () => {
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      setError("Camera permission is required to record a Polo");
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ["videos"],
-      quality: 1,
-      videoMaxDuration: 20 * 60,
-    });
-    if (!result.canceled && result.assets[0]) await uploadPickedAsset(result.assets[0]);
-  };
+  let schedulePreview: string | null = null;
+  if (compose.draft?.scheduleMinutes.trim()) {
+    try { schedulePreview = new Date(compose.attempt?.visibleAt ?? scheduledInstant(compose.draft.scheduleMinutes)!).toLocaleString(); }
+    catch { schedulePreview = "Enter a valid delay in minutes"; }
+  }
 
   if (booting) {
     return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator /><Text>Opening Polo…</Text></View></SafeAreaView>;
@@ -350,8 +365,8 @@ export default function HomeScreen() {
         <StatusBar style="auto" />
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           <View style={styles.rowBetween}>
-            <Pressable onPress={() => { setSelectedThread(null); setPosts([]); setShowImmichPicker(false); }}><Text style={styles.link}>‹ Conversations</Text></Pressable>
-            <Pressable onPress={() => void refreshPosts(session, selectedThread.id)}><Text style={styles.link}>Refresh</Text></Pressable>
+            <Pressable onPress={() => { selectedThreadId.current = null; setSelectedThread(null); setPosts([]); setShowImmichPicker(false); }}><Text style={styles.link}>‹ Conversations</Text></Pressable>
+            <Pressable onPress={() => void refreshPosts(session, selectedThread.id).catch((err) => setError(errorMessage(err)))}><Text style={styles.link}>Refresh</Text></Pressable>
           </View>
           <Text style={styles.titleSmall}>{selectedThread.title ?? selectedThread.members.map((member) => member.displayName).join(" + ")}</Text>
 
@@ -386,15 +401,48 @@ export default function HomeScreen() {
             </View>
           ) : (
             <View style={styles.composer}>
-              <Text style={styles.sectionTitle}>Send a Polo</Text>
-              <TextInput value={caption} onChangeText={setCaption} placeholder="Caption (optional)" style={styles.input} />
-              <TextInput value={scheduleMinutes} onChangeText={setScheduleMinutes} placeholder="Schedule in minutes (blank = now)" keyboardType="numeric" style={styles.input} />
-              <View style={styles.actionRow}>
-                <Pressable disabled={busy} onPress={() => void loadImmichPicker()} style={styles.actionButton}><Text style={styles.buttonText}>Immich</Text></Pressable>
-                <Pressable disabled={busy} onPress={() => void chooseDeviceMedia()} style={styles.actionButton}><Text style={styles.buttonText}>Phone</Text></Pressable>
-                <Pressable disabled={busy} onPress={() => void recordVideo()} style={styles.actionButton}><Text style={styles.buttonText}>Record</Text></Pressable>
-              </View>
-              <Text style={styles.note}>Connected to Immich {primaryConnection.serverVersion}. New phone/camera media uploads to Immich first; Polo stores only the canonical asset reference.</Text>
+              <Text style={styles.sectionTitle}>{reviewingHere ? "Review your Polo" : "Choose media"}</Text>
+              {compose.draft && !reviewingHere ? (
+                <View style={styles.section}>
+                  <Text>You have a saved draft for {compose.draft.destination}.</Text>
+                  <Pressable onPress={() => { const thread = threads.find((item) => item.id === compose.draft?.threadId); if (thread) void openThread(thread); }} style={styles.actionButton}><Text>Return to draft</Text></Pressable>
+                </View>
+              ) : (
+                <>
+                  {reviewingHere && compose.draft && (
+                    <>
+                      <Text>To: {compose.draft.destination}</Text>
+                      {compose.draft.media && <DraftPreview media={compose.draft.media} token={session.token} connectionId={compose.draft.connectionId} />}
+                      <TextInput editable={canChangeDraft} value={compose.draft.caption} onChangeText={(caption) => composer.edit({ caption })} maxLength={2000} placeholder="Caption (optional)" style={styles.input} />
+                      <TextInput editable={canChangeDraft} value={compose.draft.scheduleMinutes} onChangeText={(scheduleMinutes) => composer.edit({ scheduleMinutes })} placeholder="Schedule in minutes (blank = now)" keyboardType="numeric" style={styles.input} />
+                      {schedulePreview && <Text>Publish {schedulePreview} ({Intl.DateTimeFormat().resolvedOptions().timeZone})</Text>}
+                    </>
+                  )}
+                  <Text style={styles.bodySmall}>{reviewingHere ? "Change media:" : "Choose an item to review. Nothing sends until you confirm."}</Text>
+                  <View style={styles.actionRow}>
+                    <Pressable disabled={busy || !canChangeDraft} onPress={() => void loadImmichPicker()} style={styles.actionButton}><Text style={styles.buttonText}>Immich</Text></Pressable>
+                    <Pressable disabled={busy || !canChangeDraft} onPress={() => void selectLocal("phone")} style={styles.actionButton}><Text style={styles.buttonText}>Phone</Text></Pressable>
+                    <Pressable disabled={busy || !canChangeDraft} onPress={() => void selectLocal("camera")} style={styles.actionButton}><Text style={styles.buttonText}>Record</Text></Pressable>
+                  </View>
+                  {reviewingHere && (
+                    <>
+                      <Text accessibilityLiveRegion="polite">{({ review: "Ready to review", checking: "Checking send…", uploading: `Uploading${uploadProgress === null ? "…" : ` ${Math.round(uploadProgress * 100)}%`}`, preparing: "Preparing your post…", sent: "Sent", failed: "Send failed. Your draft is kept." })[compose.phase]}</Text>
+                      {compose.error && <Text style={styles.error}>{compose.error.replaceAll("_", " ")}</Text>}
+                      <Pressable disabled={busy || sending || !compose.draft?.media} onPress={() => void confirmSend()} style={styles.primaryButton}><Text style={styles.primaryButtonText}>{compose.attempt ? "Check & retry" : compose.draft?.scheduleMinutes.trim() ? "Schedule Polo" : "Send Polo"}</Text></Pressable>
+                      {compose.attempt ? (
+                        <Pressable disabled={sending} onPress={() => void confirmSend(true)} style={styles.actionButton}><Text>Check & discard draft</Text></Pressable>
+                      ) : (
+                        <View style={styles.actionRow}>
+                          <Pressable disabled={busy} onPress={() => composer.edit({ media: null })} style={styles.actionButton}><Text>Remove media</Text></Pressable>
+                          <Pressable disabled={busy} onPress={() => composer.cancel()} style={styles.actionButton}><Text>Cancel draft</Text></Pressable>
+                        </View>
+                      )}
+                      <Text style={styles.note}>Keep Polo open while uploading. If the connection drops, retry checks this same send before trying again.</Text>
+                    </>
+                  )}
+                  {compose.phase === "sent" && !compose.draft && <Text accessibilityLiveRegion="polite">Sent successfully.</Text>}
+                </>
+              )}
             </View>
           )}
 
@@ -403,7 +451,7 @@ export default function HomeScreen() {
               <View style={styles.rowBetween}><Text style={styles.sectionTitle}>Your Immich library</Text><Pressable onPress={() => setShowImmichPicker(false)}><Text style={styles.link}>Close</Text></Pressable></View>
               <View style={styles.assetGrid}>
                 {immichAssets.map((asset) => (
-                  <Pressable key={asset.id} disabled={busy} onPress={() => void postExisting(asset)} style={styles.assetCard}>
+                  <Pressable key={asset.id} disabled={busy || !canChangeDraft} onPress={() => selectExisting(asset)} style={styles.assetCard}>
                     <Image
                       source={{ uri: pickerThumbnailUrl(primaryConnection.id, asset.id), headers: bearerHeaders(session.token) }}
                       style={styles.assetImage}

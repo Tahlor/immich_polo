@@ -13,6 +13,7 @@ import { registerMediaRoutes } from "./media/routes.js";
 import { registerExistingImmichPostRoute } from "./posts/from-immich.js";
 import { registerPostRoutes } from "./posts/routes.js";
 import { registerLocalUploadRoute } from "./posts/upload.js";
+import { registerSendStatusRoute } from "./posts/send-requests.js";
 import { CredentialCrypto } from "./security/credential-crypto.js";
 import { registerThreadRoutes } from "./threads/routes.js";
 
@@ -60,6 +61,7 @@ export function buildApp(options: BuildAppOptions = {}) {
   registerAuthRoutes(app, database.sqlite, config);
   registerThreadRoutes(app, database.sqlite);
   registerPostRoutes(app, database.sqlite);
+  registerSendStatusRoute(app, database.sqlite);
   registerImmichRoutes(app, database.sqlite, immichProvider, credentialCrypto, config.immichAllowedBaseUrls);
   registerExistingImmichPostRoute(app, database.sqlite, immichProvider, credentialCrypto);
   registerLocalUploadRoute(app, database.sqlite, immichProvider, credentialCrypto);

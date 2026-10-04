@@ -87,6 +87,22 @@ export const posts = sqliteTable(
   ],
 );
 
+export const sendRequests = sqliteTable("send_requests", {
+  authorId: text("author_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  sendId: text("send_id").notNull(),
+  threadId: text("thread_id").notNull().references(() => threads.id, { onDelete: "cascade" }),
+  fingerprint: text("fingerprint").notNull(),
+  state: text("state", { enum: ["processing", "failed", "completed", "cancelled"] }).notNull(),
+  leaseToken: text("lease_token"),
+  leaseUntil: timestamp("lease_until"),
+  assetId: text("asset_id"),
+  uploadDuplicate: integer("upload_duplicate", { mode: "boolean" }),
+  postId: text("post_id").references(() => posts.id, { onDelete: "set null" }),
+  responseJson: text("response_json"),
+  createdAt: timestamp("created_at").notNull(),
+  updatedAt: timestamp("updated_at").notNull(),
+}, (table) => [primaryKey({ columns: [table.authorId, table.sendId] })]);
+
 export const postAssets = sqliteTable(
   "post_assets",
   {

@@ -50,12 +50,56 @@ Connection-owner only. Proxies an authenticated picker thumbnail from the exact 
 ## Post creation/media
 
 ### `POST /threads/:threadId/posts/from-immich`
-Thread member + connection owner required. Body: `connectionId`, `assetId`, optional `caption`, optional future `visibleAt`. Polo re-fetches asset metadata server-side rather than trusting client metadata. Existing media is referenced; it is not copied.
+Thread member + connection owner required. Body: `connectionId`, `assetId`, optional `caption`, optional future `visibleAt`, optional UUID `sendId`. Polo re-fetches asset metadata server-side rather than trusting client metadata. Existing media is referenced; it is not copied.
 
 ### `POST /threads/:threadId/posts/upload/:connectionId`
-Thread member + connection owner required. Exactly one multipart image/video file. Optional query parameters: `caption`, `capturedAt`, `visibleAt`.
+Thread member + connection owner required. Exactly one multipart image/video file. Optional query parameters: `caption`, `capturedAt`, `visibleAt`, UUID `sendId` and UUID `fileId`. With a send ID, file ID is required and identifies the immutable selected local file.
 
 The API streams file bytes into the selected provider rather than buffering the complete media. After Immich returns a canonical/duplicate asset ID, Polo re-fetches that asset and creates the post using the canonical reference.
+
+### Logical send retry and reconciliation (implemented for #22)
+
+The client freezes destination, source/connection, caption, absolute schedule and
+send ID on explicit confirmation. Reuse that ID and identical input for retries;
+a deliberate new share uses a new ID. Requests without `sendId` retain the legacy
+non-idempotent behavior for compatibility; the current composer always sends one.
+The upload's `fileId` must continue to identify the same bytes/file selection.
+It is a client identity, not a server-computed content hash or authorization grant.
+
+SQLite `send_requests` records are scoped by authenticated author + send ID.
+Creation returns `201`; completed replay returns `200` with the original result,
+without re-fetching/re-uploading media or creating another post/outbox event.
+Changed destination/source/metadata with the same ID returns `409
+send_identity_conflict`; a live concurrent attempt returns `409 send_in_progress`.
+A 90-second database lease, renewed every 20 seconds, fences stale workers.
+Post creation, publication outbox insertion and completion record commit together.
+Current membership and connection ownership are required on creation/replay;
+current membership is also rechecked after asynchronous provider work.
+
+After a successful upload response, its canonical asset ID is checkpointed before
+metadata lookup. A retry can resume metadata/post preparation with no multipart
+body if that checkpoint exists. Polo never stores original bytes here. If Immich
+accepted bytes but its response was lost before the checkpoint, retry may upload
+again; actual provider deduplication/residue remains #13's runtime gate. This
+mechanism guarantees a single Polo post per logical send, not unverified Immich
+upload behavior.
+
+- `GET /threads/:threadId/sends/:sendId` — current member + send author only;
+  `404 send_not_found` for unknown/other-owner/wrong-thread/removed-member reads.
+  Returns `{state:"completed", result:{post, upload?}}`, `{state:"processing",
+  uploadRequired}`, `{state:"retryable", uploadRequired}`, or `{state:"cancelled"}`.
+  `uploadRequired:false` allows a checkpointed upload to resume without a body.
+- `DELETE /threads/:threadId/sends/:sendId` — author/member check-and-discard.
+  Completed sends return their result and keep the post. Active sends return
+  `409 send_in_progress`. Missing/failed/expired sends get a durable cancellation
+  tombstone, fencing even an original request that arrives later. This cancels a
+  logical send; it never deletes media from Immich.
+
+Status/cancellation responses use `Cache-Control: no-store`. Deleting a created
+Polo post retains its send tombstone; replay/reconciliation returns `410
+send_post_deleted`, preventing accidental resurrection. Cancelled send IDs return
+`410 send_cancelled` on creation. Send records persist across process restarts;
+there is no automatic retention pruning in this household-sized implementation.
 
 ### `GET /posts/:postId/assets/:postAssetId/thumbnail`
 Authorizes the Polo post/post-asset first, then resolves the exact stored Immich connection. A recipient cannot use an arbitrary Immich asset ID as authorization.
@@ -75,7 +119,7 @@ The server publication worker persists exactly one notification-outbox event per
 
 ## Planned, not implemented
 
-The [household finish plan](MVP_FINISH_PLAN.md) requires invite lifecycle/registration (#21), push registration/preferences/delivery (#9), connection health/credential replacement, per-send retry reconciliation, and client-facing unread/resume summaries. No route signatures are promised here until implementation. Reschedule/delete/view **writes** listed above already exist; they must not be rebuilt as if missing.
+The [household finish plan](MVP_FINISH_PLAN.md) requires invite lifecycle/registration (#21), push registration/preferences/delivery (#9), connection health/credential replacement and client-facing unread/resume summaries. No route signatures are promised here until implementation. Reschedule/delete/view **writes** listed above already exist; they must not be rebuilt as if missing.
 
 ## Provider behavior
 

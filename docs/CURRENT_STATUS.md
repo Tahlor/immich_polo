@@ -134,11 +134,11 @@ The build profile and package identity exist, but #20 still owns artifact build/
 
 These were rechecked against current `master`, not merely copied from the September audit:
 
-1. **Selecting media still sends immediately.** Existing Immich selection calls `postExisting`; phone/camera selection uploads immediately. There is no shared preview/draft with explicit Send/Schedule confirmation.
-2. **Phone/camera captions are still dropped.** `uploadPickedAsset` does not pass the current caption into `uploadLocalPost`, then clears the caption afterward.
-3. **Optional EXIF capture-time parsing can still throw.** `new Date(DateTimeOriginal).toISOString()` is used without validating the parsed date.
+1. **#22 source changes:** all three sources now select into a shared review draft with explicit Send/Schedule. Send state/retry and SQLite reconciliation are implemented; exact check/CI/browser evidence belongs to #22. Physical real-media acceptance remains gated.
+2. **#22 caption propagation:** phone/camera uploads now forward the reviewed caption and retain it on failure.
+3. **#22 optional metadata:** capture dates are validated before conversion; invalid optional EXIF is omitted.
 4. **A startup home/network failure still clears the saved session.** The startup path catches identity or home-load failure together and clears SecureStore instead of distinguishing an invalid token from temporary API failure.
-5. **Thread requests/drafts are not isolated.** `selectedThread` changes before the new post response lands; shared caption/schedule state can cross thread transitions and stale responses are not scoped to the active request/thread.
+5. **#23 broader conversation isolation remains.** #22 binds drafts/sends to their original thread and guards post refresh by active thread/session; full request-generation isolation/navigation behavior remains #23.
 6. **PostView is write-only from the conversation list API’s perspective.** `/threads/:threadId/posts` does not return the current user’s view/resume state, so the client cannot restore saved playback from that response.
 7. **Timeline/inbox ordering is still creation-based.** Thread list uses thread creation time; post list uses `posts.created_at`, not publication/latest-visible activity. Delayed publication can therefore appear at the wrong conversational position.
 8. **Author mutations do not also require current membership.** `PATCH /posts/:postId/schedule` and `DELETE /posts/:postId` check authorship but not current thread membership; error differences also expose some post-existence/state information.

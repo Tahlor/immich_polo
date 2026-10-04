@@ -10,12 +10,15 @@ import type { CredentialCrypto } from "../security/credential-crypto.js";
 import { isThreadMember } from "../threads/authorization.js";
 import { createMediaPost, serializeCreatedMediaPost } from "./create-media-post.js";
 
+import { claimSend, findSend, SendIdSchema, SendRequestError } from "./send-requests.js";
+
 const ParamsSchema = z.object({ threadId: z.string().min(1) });
 const BodySchema = z.object({
   connectionId: z.string().min(1),
   assetId: z.string().min(1),
   caption: z.string().trim().max(2000).optional(),
   visibleAt: z.string().min(1).optional(),
+  sendId: SendIdSchema.optional(),
 });
 
 export function registerExistingImmichPostRoute(
@@ -38,13 +41,6 @@ export function registerExistingImmichPostRoute(
     const connection = ownedConnectionSecret(sqlite, crypto, user.id, body.data.connectionId);
     if (!connection) return reply.code(404).send({ error: "immich_connection_not_found" });
 
-    let asset;
-    try {
-      asset = await provider.getAssetMetadata(connection.secret, body.data.assetId);
-    } catch (error) {
-      return sendImmichError(reply, error);
-    }
-
     let visibleAtMs: number | undefined;
     if (body.data.visibleAt) {
       let requested: Date;
@@ -53,20 +49,42 @@ export function registerExistingImmichPostRoute(
       } catch {
         return reply.code(400).send({ error: "invalid_visible_at" });
       }
-      if (requested.getTime() <= Date.now()) {
+      if (requested.getTime() <= Date.now() && (!body.data.sendId || !findSend(sqlite, user.id, body.data.sendId))) {
         return reply.code(400).send({ error: "visible_at_must_be_future" });
       }
       visibleAtMs = requested.getTime();
     }
 
-    const post = createMediaPost(sqlite, {
-      threadId: params.data.threadId,
-      authorId: user.id,
-      connectionId: connection.stored.id,
-      asset,
-      ...(body.data.caption !== undefined ? { caption: body.data.caption } : {}),
-      ...(visibleAtMs !== undefined ? { visibleAtMs } : {}),
-    });
-    return reply.code(201).send({ post: serializeCreatedMediaPost(post) });
+    let send: ReturnType<typeof claimSend> | undefined;
+    try {
+      if (body.data.sendId) {
+        send = claimSend(sqlite, user.id, body.data.sendId, params.data.threadId, {
+          source: "immich", connectionId: body.data.connectionId, assetId: body.data.assetId,
+          caption: body.data.caption ?? null, visibleAt: visibleAtMs ?? null,
+        });
+        if (send.replay) return reply.code(200).send(send.replay);
+      }
+      const asset = await provider.getAssetMetadata(connection.secret, body.data.assetId);
+      const create = () => {
+        if (!isThreadMember(sqlite, user.id, params.data.threadId)) throw new SendRequestError("not_thread_member", 403);
+        return {
+          post: serializeCreatedMediaPost(createMediaPost(sqlite, {
+            threadId: params.data.threadId,
+            authorId: user.id,
+            connectionId: connection.stored.id,
+            asset,
+            ...(body.data.caption !== undefined ? { caption: body.data.caption } : {}),
+            ...(visibleAtMs !== undefined ? { visibleAtMs } : {}),
+          })),
+        };
+      };
+      const result = send?.complete ? send.complete(create) : create();
+      return reply.code(201).send(result);
+    } catch (error) {
+      if (error instanceof SendRequestError) return reply.code(error.status).send({ error: error.code });
+      return sendImmichError(reply, error);
+    } finally {
+      send?.release?.();
+    }
   });
 }
