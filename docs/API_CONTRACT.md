@@ -36,6 +36,11 @@ Lists only the current user's connection metadata.
 ### `POST /immich-connections`
 Body: `baseUrl`, `apiKey`. The selected provider must successfully verify the connection before Polo encrypts/stores the key. With the default `IMMICH_PROVIDER=unverified`, this fails closed; a validated deployment selects `official-v3`.
 
+If `IMMICH_ALLOWED_BASE_URLS` is configured, other base URLs return `403
+immich_base_url_not_allowed` before provider verification. Trailing slashes
+are normalized. Archimedes permits only `http://127.0.0.1:2283`; an unset
+allowlist remains unrestricted for development and must not be used there.
+
 ### `GET /immich-connections/:connectionId/assets`
 Connection-owner only. Query: optional `type=image|video`, `limit`, `cursor`. Returns safe picker metadata only.
 

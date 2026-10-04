@@ -1,6 +1,10 @@
 # Archimedes deployment
 
-Issue #18 owns host execution and evidence. This document records the intended repository-side deployment contract so machine configuration does not have to be rediscovered.
+Issue #18 owns host execution and evidence. The API was deployed on 2026-10-04;
+see [the live deployment runbook](../deploy/archimedes/README.md) for commands
+and the issue for exact deployed SHA and observations. API infrastructure is
+verified; real media remains **BLOCKED** by the scoped-key contract gates
+#11–#13. No Android, web-client, or two-phone acceptance is claimed.
 
 ## Role split
 
@@ -21,7 +25,7 @@ polo.taylorarchibald.com
 Archimedes nginx
        |
        v
-127.0.0.1:<Polo port>
+127.0.0.1:13060
        |
        +-- local SQLite
        |
@@ -36,15 +40,23 @@ Expected values, with secrets stored outside Git:
 
 ```dotenv
 HOST=127.0.0.1
-PORT=<dedicated loopback port>
-DATABASE_PATH=<local Archimedes path>/polo.sqlite
+PORT=13060
+DATABASE_PATH=/var/lib/immich-polo/polo.sqlite
 POLO_REGISTRATION_SECRET=<secret>
 POLO_CREDENTIAL_KEY=<32-byte base64 secret>
 SESSION_TTL_DAYS=30
-IMMICH_PROVIDER=official-v3
+IMMICH_PROVIDER=unverified
+IMMICH_ALLOWED_BASE_URLS=http://127.0.0.1:2283
 ```
 
 `IMMICH_PROVIDER=official-v3` is enabled only after #11-#13 validate the actual Immich deployment. Until then keep `unverified` and report media operations as BLOCKED rather than guessing.
+
+The allowlist is active in production and rejects other origins with `403
+immich_base_url_not_allowed` before contacting a provider. `/ready` checks
+SQLite and reports the configured provider; its `200` does not establish
+Immich readiness. The local Immich ping/version returned `200` and version
+`3.1.0`, but production Polo makes no upstream media calls in `unverified`
+mode. Actual credential-backed local-origin proof remains #11–#13 work.
 
 The Android build can use:
 

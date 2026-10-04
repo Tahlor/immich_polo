@@ -68,6 +68,14 @@ Fresh clone/install, persistent multi-user authorization, and restart/race sched
 
 **Gate:** local agent works on **Archimedes**, verifies port/path/Node version, installs systemd/nginx/local SQLite, and uses local Immich origin `http://127.0.0.1:2283`. Pi3 stays storage only.
 
+**Observed 2026-10-04:** API infrastructure is deployed at
+`https://polo.taylorarchibald.com` on loopback `13060`, with local SQLite,
+bearer auth, restart/crash persistence, protected secrets, and online
+backup/restore verified. Provider remains `unverified`; actual Polo-to-Immich
+media locality, upload and video Range acceptance are **BLOCKED** pending
+#11–#13 and a dedicated scoped test key. See #18 for exact SHA/evidence.
+Infrastructure passing does not close this acceptance gate or #19.
+
 ### #9 — push notifications
 
 Notification outbox exists; provider/device registration/retry/deep-link delivery remains implementation work.

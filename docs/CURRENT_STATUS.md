@@ -1,18 +1,25 @@
 # Current status
 
-Snapshot date: **2026-10-03**.
+Snapshot date: **2026-10-04**.
 
 This document is the shortest authoritative answer to “what is implemented, what is verified, and what is actually deployed?” It should be updated whenever runtime evidence materially changes.
 
 ## Bottom line
 
-**Source/CI status: VERIFIED. Deployment/runtime status: NOT VERIFIED.**
+**Source checks and API infrastructure: VERIFIED. Real-media/device acceptance: BLOCKED / NOT VERIFIED.**
 
-Latest `master`: **`90fee145de14186c7f80dfef047f4024156df7df`** (`ci: use reproducible npm installs`, 2026-09-10).
+Implementation CI baseline: **`90fee145de14186c7f80dfef047f4024156df7df`** (`ci: use reproducible npm installs`, 2026-09-10).
 
 GitHub Actions run **34442702058** completed successfully for that exact SHA using Node 22.14 / npm 10.9.2 and `npm ci`. The run exercised lint, typecheck, build, and the repository unit/API/provider tests.
 
-There is **no recorded evidence that this SHA, or any earlier Immich Polo SHA, has been deployed and validated on Archimedes**. Issue #18 remains open with no deployment report. There is no recorded deployed SHA, systemd unit/port, `/health` + `/ready` result, public Polo hostname, persistent SQLite result, or restart/backup evidence. Treat the production deployment state as **INCOMPLETE_EVIDENCE / not demonstrated**, not as deployed.
+On 2026-10-04 the Archimedes agent deployed the API, beginning from current
+remote master `2c7156425b3c8230ad99de708c3a5965bdb3ce1c` (Actions run
+37142764692: success). Local `npm ci` and `npm run check` passed on Node
+24.16.0/npm 11.13.0, including 28 domain/provider/API tests and Expo web export.
+Deployment artifact fixes include protected database permissions, the local
+origin allowlist, daily backup units and restore ownership preservation.
+The final exact deployed/tested SHA and subsequent CI result are recorded
+in #18 rather than inferred from this snapshot.
 
 Likewise, there is no posted standalone APK/two-phone acceptance result. #20 and #19 remain open.
 
@@ -65,9 +72,25 @@ Those remain runtime gates in #11–#20.
 
 ### Archimedes
 
-**NOT VERIFIED / no deployment report exists.**
+**API infrastructure verified; provider/media acceptance BLOCKED.**
 
-The repo contains reusable deployment templates, but templates are not a deployment. #18 is still the owning ticket. A valid deployment report must include at minimum:
+Observed runtime: `immich-polo.service` runs as `ubuntu`, enabled, on
+`127.0.0.1:13060`; SQLite is local ext4 at
+`/var/lib/immich-polo/polo.sqlite` (mode `0600`). Secrets are outside Git at
+`/etc/immich-polo/immich-polo.env` (root-only). Direct nginx HTTPS at
+`https://polo.taylorarchibald.com` returns `200` health/readiness without SSO.
+Three disposable accounts and a shared thread survived service restart,
+online-backup restore and a SIGKILL followed by automatic restart; outsider
+and unauthenticated requests were denied. Test records were removed afterward.
+Daily online SQLite backups are enabled; the matching credential environment
+has a root-only backup. Stopping Polo did not stop Immich.
+
+Immich reports `3.1.0` locally. Production permits only
+`http://127.0.0.1:2283` and remains `IMMICH_PROVIDER=unverified`. No scoped
+test API key is available to the agent, so actual provider requests, upload,
+Range and outage recovery remain blocked by #11–#13. The API-only deployment
+does not serve a web client or demonstrate #19. #18 remains the owning ticket.
+A deployment report must continue to include:
 
 - exact deployed Polo SHA;
 - host `archimedes`;
@@ -82,7 +105,7 @@ The repo contains reusable deployment templates, but templates are not a deploym
 - real Polo -> `http://127.0.0.1:2283` evidence;
 - final PASS / FAIL / BLOCKED / INCOMPLETE_EVIDENCE state.
 
-Until that is posted to #18, do not describe Polo as deployed.
+Treat infrastructure evidence and real-media acceptance as separate results.
 
 ### Android
 
@@ -122,8 +145,8 @@ Dedicated sub-issues created from this snapshot should remain cross-linked to th
 
 ## Recommended execution order
 
-1. **Deploy the green `master` SHA to Archimedes under #18** with provider fail-closed initially and record all deployment evidence.
-2. **Run #11–#13 against the local Immich origin** and fix only observed contract mismatches.
+1. Keep #18's deployed SHA, local checks and CI evidence current.
+2. Supply a dedicated least-privilege test key, then **run #11–#13 against the local Immich origin** and fix only observed contract mismatches.
 3. Enable the verified provider and prove real media paths through the deployed API.
 4. Build/install the standalone APK (#20/#14).
 5. Run the two-phone scenario (#19), including #16/#17 persistence/scheduling evidence.

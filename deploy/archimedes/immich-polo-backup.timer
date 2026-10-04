@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Immich Polo SQLite backup
+
+[Timer]
+OnCalendar=*-*-* 03:10:00 UTC
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

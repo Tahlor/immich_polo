@@ -41,6 +41,13 @@ Code existence is not runtime proof. Real Immich behavior is still gated by [#11
 
 ## Primary deployment
 
+The API is deployed at **https://polo.taylorarchibald.com** as of 2026-10-04.
+Local/public health, bearer auth, SQLite persistence, crash recovery, and
+backup/restore were exercised on Archimedes. Media remains fail-closed pending
+#11–#13; the deployed API is not a verified photo/video product yet. The web
+client is not served there. Exact SHA and runtime evidence belong to #18;
+operator commands are in [`deploy/archimedes/README.md`](deploy/archimedes/README.md).
+
 For this installation, Polo belongs on **Archimedes**, beside the Immich server:
 
 ```text
